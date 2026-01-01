@@ -1,17 +1,85 @@
 import { CreateEmbed, GetUserDailyData, SaveUserDaily } from '../../utils/functions.js';
 import { SlashCommandBuilder } from 'discord.js';
 
-// Calculate daily reward based on streak
-function calculateDailyReward(streak) {
-    if (streak >= 91) {
-        return { cash: 40, tier: 'Legendary', daysUntilNext: null };
-    } else if (streak >= 61) {
-        return { cash: 30, tier: 'Elite', daysUntilNext: 91 - streak };
-    } else if (streak >= 31) {
-        return { cash: 20, tier: 'Dedicated', daysUntilNext: 61 - streak };
-    } else {
-        return { cash: 10, tier: 'Beginner', daysUntilNext: 31 - streak };
+// Daily Rewards Configuration - Easy to modify
+const DailyRewards = {
+    Tier1: {
+        name: 'Beginner',
+        minDays: 1,
+        maxDays: 30,
+        rewards: [
+            { type: 'cash', amount: 10, chance: 100 }
+        ]
+    },
+    Tier2: {
+        name: 'Dedicated',
+        minDays: 31,
+        maxDays: 60,
+        rewards: [
+            { type: 'cash', amount: 20, chance: 100 }
+        ]
+    },
+    Tier3: {
+        name: 'Elite',
+        minDays: 61,
+        maxDays: 90,
+        rewards: [
+            { type: 'cash', amount: 30, chance: 100 }
+        ]
+    },
+    Tier4: {
+        name: 'Legendary',
+        minDays: 91,
+        maxDays: null, // No maximum
+        rewards: [
+            { type: 'cash', amount: 40, chance: 100 }
+        ]
     }
+};
+
+// Get tier based on streak days
+function getTierByStreak(streak) {
+    const tiers = Object.values(DailyRewards);
+    
+    for (const tier of tiers) {
+        if (streak >= tier.minDays && (tier.maxDays === null || streak <= tier.maxDays)) {
+            return tier;
+        }
+    }
+    
+    return DailyRewards.Tier1; // Default to Tier1
+}
+
+// Calculate next tier info
+function getNextTierInfo(currentTier, streak) {
+    const tiers = Object.values(DailyRewards);
+    const currentIndex = tiers.findIndex(t => t.name === currentTier.name);
+    
+    if (currentIndex === -1 || currentIndex === tiers.length - 1) {
+        return null; // No next tier
+    }
+    
+    const nextTier = tiers[currentIndex + 1];
+    return {
+        name: nextTier.name,
+        daysUntilNext: nextTier.minDays - streak
+    };
+}
+
+// Process rewards and return total cash
+function processRewards(tier) {
+    let totalCash = 0;
+    const rewardMessages = [];
+    
+    for (const reward of tier.rewards) {
+        if (reward.type === 'cash') {
+            totalCash += reward.amount;
+            rewardMessages.push(`+${reward.amount} cash`);
+        }
+        // Future: Add other reward types here (roles, backgrounds, etc.)
+    }
+    
+    return { totalCash, rewardMessages };
 }
 
 export default {
@@ -43,12 +111,24 @@ export default {
             // First time claiming
             if (!lastClaim) {
                 currentStreak = 1;
-                const reward = calculateDailyReward(currentStreak);
-                User.cash += reward.cash;
+                const tier = getTierByStreak(currentStreak);
+                const { totalCash, rewardMessages } = processRewards(tier);
+                const nextTierInfo = getNextTierInfo(tier, currentStreak);
+                
+                User.cash += totalCash;
                 
                 Embed.Color = 5763719; // Green
                 Embed.Title = 'Daily Reward Claimed!';
-                Embed.Description = `Welcome to the daily rewards system!\n\n**Cash Earned:** +${reward.cash}\n**Current Streak:** ${currentStreak} day\n**Tier:** ${reward.tier}\n**New Balance:** ${User.cash}\n\n**Progress:** ${reward.daysUntilNext} days until next tier\n\n*Come back in 24 hours to continue your streak!*`;
+                
+                let description = `Welcome to the daily rewards system!\n\n**Cash Earned:** +${totalCash}\n**Current Streak:** ${currentStreak} day\n**Tier:** ${tier.name}\n**New Balance:** ${User.cash}`;
+                
+                if (nextTierInfo) {
+                    description += `\n\n**Progress:** ${nextTierInfo.daysUntilNext} days until ${nextTierInfo.name} tier`;
+                }
+                
+                description += `\n\n*Come back in 24 hours to continue your streak!*`;
+                
+                Embed.Description = description;
                 
                 SaveUserDaily(User, { streak: currentStreak }, Bot);
                 
@@ -67,11 +147,11 @@ export default {
             if (timeDiff < 24) {
                 const hoursLeft = Math.floor(24 - timeDiff);
                 const minutesLeft = Math.floor((24 - timeDiff - hoursLeft) * 60);
-                const reward = calculateDailyReward(currentStreak);
+                const tier = getTierByStreak(currentStreak);
                 
                 Embed.Color = 15548997; // Red
                 Embed.Title = 'Daily Reward on Cooldown';
-                Embed.Description = `You've already claimed your daily reward!\n\n**Time Remaining:** ${hoursLeft}h ${minutesLeft}m\n**Current Streak:** ${currentStreak} day${currentStreak > 1 ? 's' : ''}\n**Current Tier:** ${reward.tier}\n\n*Come back later to claim your next reward!*`;
+                Embed.Description = `You've already claimed your daily reward!\n\n**Time Remaining:** ${hoursLeft}h ${minutesLeft}m\n**Current Streak:** ${currentStreak} day${currentStreak > 1 ? 's' : ''}\n**Current Tier:** ${tier.name}\n\n*Come back later to claim your next reward!*`;
                 
                 if (isInteraction) {
                     await msg.reply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
@@ -85,24 +165,27 @@ export default {
             if (timeDiff >= 24 && timeDiff < 48) {
                 const oldStreak = currentStreak;
                 currentStreak += 1;
-                const oldReward = calculateDailyReward(oldStreak);
-                const reward = calculateDailyReward(currentStreak);
-                User.cash += reward.cash;
+                const oldTier = getTierByStreak(oldStreak);
+                const newTier = getTierByStreak(currentStreak);
+                const { totalCash, rewardMessages } = processRewards(newTier);
+                const nextTierInfo = getNextTierInfo(newTier, currentStreak);
+                
+                User.cash += totalCash;
                 
                 // Check if tier upgraded
-                const tierUpgraded = oldReward.tier !== reward.tier;
+                const tierUpgraded = oldTier.name !== newTier.name;
                 
                 Embed.Color = 5763719; // Green
                 Embed.Title = tierUpgraded ? 'TIER UPGRADE! Daily Reward Claimed!' : 'Daily Reward Claimed!';
                 
-                let description = `Great job keeping your streak alive!\n\n**Cash Earned:** +${reward.cash}\n**Current Streak:** ${currentStreak} day${currentStreak > 1 ? 's' : ''}\n**Tier:** ${reward.tier}\n**New Balance:** ${User.cash}`;
+                let description = `Great job keeping your streak alive!\n\n**Cash Earned:** +${totalCash}\n**Current Streak:** ${currentStreak} day${currentStreak > 1 ? 's' : ''}\n**Tier:** ${newTier.name}\n**New Balance:** ${User.cash}`;
                 
                 if (tierUpgraded) {
-                    description += `\n\n**CONGRATULATIONS!**\nYou've reached the ${reward.tier} tier!\nDaily rewards increased to ${reward.cash} cash!`;
+                    description += `\n\n**CONGRATULATIONS!**\nYou've reached the ${newTier.name} tier!`;
                 }
                 
-                if (reward.daysUntilNext) {
-                    description += `\n\n**Progress:** ${reward.daysUntilNext} days until next tier`;
+                if (nextTierInfo) {
+                    description += `\n\n**Progress:** ${nextTierInfo.daysUntilNext} days until ${nextTierInfo.name} tier`;
                 }
                 
                 description += `\n\n*Keep it up! Come back tomorrow!*`;
@@ -122,12 +205,24 @@ export default {
             // More than 48h - reset streak
             if (timeDiff >= 48) {
                 currentStreak = 1;
-                const reward = calculateDailyReward(currentStreak);
-                User.cash += reward.cash;
+                const tier = getTierByStreak(currentStreak);
+                const { totalCash, rewardMessages } = processRewards(tier);
+                const nextTierInfo = getNextTierInfo(tier, currentStreak);
+                
+                User.cash += totalCash;
                 
                 Embed.Color = 15844367; // Yellow/Orange
                 Embed.Title = 'Daily Reward Claimed';
-                Embed.Description = `Your streak was reset, but you still got your reward!\n\n**Cash Earned:** +${reward.cash}\n**Current Streak:** ${currentStreak} day (Reset)\n**Tier:** ${reward.tier}\n**New Balance:** ${User.cash}\n\n**Progress:** ${reward.daysUntilNext} days until next tier\n\n*Try to claim daily to build a longer streak!*`;
+                
+                let description = `Your streak was reset, but you still got your reward!\n\n**Cash Earned:** +${totalCash}\n**Current Streak:** ${currentStreak} day (Reset)\n**Tier:** ${tier.name}\n**New Balance:** ${User.cash}`;
+                
+                if (nextTierInfo) {
+                    description += `\n\n**Progress:** ${nextTierInfo.daysUntilNext} days until ${nextTierInfo.name} tier`;
+                }
+                
+                description += `\n\n*Try to claim daily to build a longer streak!*`;
+                
+                Embed.Description = description;
                 
                 SaveUserDaily(User, { streak: currentStreak }, Bot);
                 
