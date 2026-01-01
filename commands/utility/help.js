@@ -18,7 +18,7 @@ function buildCategoryEmbed(category, Bot) {
             Embed.Title = "📋 9k Bot Command Categories";
             Embed.Description = `Welcome to 9k Bot! Select a category below to explore commands:
 
-**📊 Economy** - Balance, shop, robux trading
+**📊 Economy** - Balance, shop, daily rewards, robux trading
 **🏛️ Server** - Analytics, leaderboard, voting  
 **👥 User & Roles** - Profile, colors, channel roles
 **🎮 Fun & Games** - Gambling, games, entertainment
@@ -33,6 +33,10 @@ function buildCategoryEmbed(category, Bot) {
             Embed.Description = `**Balance & Profile**
 \`/userinfo\` or \`!9k User\` - Check your balance and stats
 \`!9k balance\` - Quick balance check
+
+**Rewards**
+\`/daily\` or \`!9k Daily\` - Claim daily reward & streak (New Tiers!)
+\`/redeem\` or codes - Redeem special codes for cash
 
 **Shopping System**
 \`/shop\` or \`!9k Shop\` - View available items
@@ -81,9 +85,6 @@ Add time filters: \`!9k Messages Week\`, \`!9k Messages Day\`
 \`/coinflip\` or \`!9k coinflip\` - Flip a coin
 \`/guess\` or \`!9k guess\` - Number guessing game
 \`/work\` or \`!9k Work\` - Random work events
-
-**💰 Rewards**
-\`/redeem\` or codes - Redeem special codes for cash
 
 *Note: These commands may move to a separate 9kFun bot in the future*`;
             break;
@@ -193,7 +194,9 @@ function buildLegacyHelpEmbed(mode, Bot) {
 
 Tip: Use the buttons below to switch views.
 
-**!9k Messages (All, Year, Month, Week, Day, Hour) #Channel** - *List server message's within time ranges and a specific channel if added "!9k Messages Week #Chat" shows messages for the last 7 days in the channel named Chat.*
+**!9k Daily** - *Claim daily rewards with tier system!*
+
+**!9k Messages (All, Year, Month, Week, Day, Hour) #Channel** - *List server message's within time ranges*
 
 **!9k List Colors** - *List all color role's in the server.*
 
@@ -205,27 +208,29 @@ Tip: Use the buttons below to switch views.
 
 **!9k Shop** - *List the bot's shop item's*
 
-**!9k Buy** - *Buy's item from the shop (send command then send the item's # to purchase)*
+**!9k Buy** - *Buy's item from the shop*
 
 **!9k Robux Rate** - *Gives info about current robux trading rate's.*
 
-**!9k Buy Robux** - *Allows you to trade bot point's/cash for robux woah!*
+**!9k Buy Robux** - *Allows you to trade bot point's/cash for robux!*
 
 **!9k Emote** - *Create's a message you can react on to get emoji info.*
 
 **!9k Work** - *Random Event / Work Job.*
 
-**!9k User** - *Get's user info your's unless you add a user mention!*
+**!9k User** - *Get's user info*
 
 **!9k Slots** - *A slot game you can play to win and lose money!*
 
 **!9k bj** - *Play some black jack and become the next high roller!*\n
-**!9k Transfer** - *Let's you send some of your cash to another user beware the banking fee's!*\n
+**!9k Transfer** - *Let's you send some of your cash to another user!*\n
 **!9k 9kTube** - *Info about our youtube extension!*\n
-**!9k Coin Flip** - *Flip a coin see the result good for solving dispute's*\n
-**!9k Guess** - *Guess the number im thinking of get it right and win some cash!*\n
-**!9k Invite** - *Get a link to invite 9k to your server it's free!*\n
-**!9k Server List** - *List the server's 9k is in.*
+**!9k Coin Flip** - *Flip a coin see the result!*\n
+**!9k Guess** - *Guess the number im thinking of!*\n
+**!9k Invite** - *Get a link to invite 9k to your server!*\n
+**!9k Server List** - *List the server's 9k is in.*\n
+**!9k Server Invite <link>** - *Register your server!*\n
+**!9k Vote <id>** - *Vote for a server!*
 `;
 
     const slashHelp = buildSlashCommandsHelp(Bot);

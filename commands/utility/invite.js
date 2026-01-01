@@ -7,7 +7,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('invite')
         .setDescription('Get the invite link to add 9k bot to your server and join our community'),
-    aliases: ['!9k Invite', 'get !9k', 'invite !9k', '!9k bot invite', '!9k join link', '!9k link', 'link !9k', 'add !9k', '!9k add', '!9k server invite', '!9k guild invite'],
+    aliases: ['!9k Invite', 'get !9k', 'invite !9k', '!9k bot invite', '!9k join link', '!9k link', 'link !9k', 'add !9k', '!9k add', '!9k guild invite'],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const Embed = structuredClone(Bot.Embed);

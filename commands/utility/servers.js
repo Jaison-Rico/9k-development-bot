@@ -7,7 +7,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('servers')
         .setDescription('View the server leaderboard and community rankings'),
-    aliases: ['!9k Servers', '!9k Servers List', '!9k Leaderboard', '!9k Server List', '/servers'],
+    aliases: ['!9k servers', '!9k servers list', '!9k leaderboard', '!9k server list', '/servers'],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         if (isInteraction) {

@@ -104,9 +104,8 @@ for (const folder of commandFolders) {
 
 /* Init */
 ReturnDB('BotUsers', Bot).then(function (value) { Bot.Users = value });
-//ReturnDB('BotUsers', Bot).then(function (value) { Bot.Users = value });
 ReturnDB('BotServers', Bot).then(function (value) { Bot.Servers = value });
-//ReturnDB('Messages', Bot).then(function (value) { Bot.ServerMessages = value });
+ReturnDB('Messages', Bot).then(function (value) { Bot.ServerMessages = value });
 
 Bot.Client.once(Events.ClientReady, readyClient => {
         console.log(`Ready! Logged in as ${readyClient.user.tag}`);
@@ -153,13 +152,27 @@ Bot.Client.on('messageCreate', msg => {
                 cmdrunning = true;
         }
 
+        let bestMatch = null;
+        let bestMatchLength = 0;
+
         Bot.Commands.forEach(cmd => {
-                if (cmdrunning) return;
-                if (cmd.aliases && SearchString(mtext, cmd.aliases)) {
-                        cmd.execute(msg, User, Bot);
-                        cmdrunning = true;
-                }
+            if (cmd.aliases) {
+                cmd.aliases.forEach(alias => {
+                     // Check if message starts with alias (case insensitive)
+                     if (mtext.toLowerCase().startsWith(alias.toLowerCase())) {
+                         if (alias.length > bestMatchLength) {
+                             bestMatch = cmd;
+                             bestMatchLength = alias.length;
+                         }
+                     }
+                });
+            }
         });
+
+        if (bestMatch && !cmdrunning) {
+             bestMatch.execute(msg, User, Bot);
+             cmdrunning = true;
+        }
 
         if (cmdrunning == true) {
                 SetCoolDown(msg, `DefaultCmd-${msg.author.id}`, 1100)
