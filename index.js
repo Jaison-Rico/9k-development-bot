@@ -62,7 +62,7 @@ Bot.WebHooks = {
 };
 
 Bot.Shop = {};
-Bot.ServerMessages = false;
+Bot.ServerMessages = [];
 Bot.Shop.Bank = {};
 Bot.Shop.Bank.BotCash = config.shop.bank.botCash;
 Bot.Shop.Bank.Robux = config.shop.bank.robux;
