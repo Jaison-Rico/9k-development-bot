@@ -84,19 +84,25 @@ export function SearchString(text, words) {
 
 export function SaveBotUsers(Bot) {
     const connection = ConnectDB(Bot);
-    connection.connect();
-    Bot.Users.forEach(function (value, index, array) {
-        if (value.userid) {
-            const messages = value.messages ?? 0;
-            const exp = value.exp ?? 0;
-            const cash = value.cash ?? 0;
-            connection.query('UPDATE BotUsers SET messages=' + messages + ', exp=' + exp + ', cash=' + cash + ' WHERE userid=' + value.userid + ';', function (error, results, fields) {
+    connection.on('error', function (err) { console.error('Db Error:', err); });
+
+    const users = Array.isArray(Bot.Users) ? Bot.Users : [];
+    users.forEach(function (value) {
+        if (!value || !value.userid) return;
+
+        // Message counting is handled by another bot; do not overwrite `messages`.
+        const exp = value.exp ?? 0;
+        const cash = value.cash ?? 0;
+
+        connection.query(
+            'UPDATE BotUsers SET exp = ?, cash = ? WHERE userid = ?;',
+            [exp, cash, value.userid],
+            function (error, results) {
                 if (error) console.error('SaveBotUsers Error:', error);
-                console.log(results);
-            });
-            connection.on('error', function (err) { console.error('Db Error:', err); });
-        }
+            }
+        );
     });
+
     connection.end();
 }
 
@@ -106,11 +112,20 @@ export function SaveUser(User, Bot) {
         return;
     }
     const connection = ConnectDB(Bot);
-    connection.connect();
-    connection.query('UPDATE BotUsers SET messages=' + User.messages + ', exp=' + User.exp + ', cash=' + User.cash + ' WHERE userid=' + User.userid + ';', function (error, results, fields) {
-        if (error) console.error('SaveUser Error:', error);
-    });
     connection.on('error', function (err) { console.error('Db Error:', err); });
+
+    // Message counting is handled by another bot; do not overwrite `messages`.
+    const exp = User.exp ?? 0;
+    const cash = User.cash ?? 0;
+
+    connection.query(
+        'UPDATE BotUsers SET exp = ?, cash = ? WHERE userid = ?;',
+        [exp, cash, User.userid],
+        function (error) {
+            if (error) console.error('SaveUser Error:', error);
+        }
+    );
+
     connection.end();
 }
 

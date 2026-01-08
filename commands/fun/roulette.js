@@ -17,6 +17,7 @@ export default {
         .setDescription('Play roulette and bet your cash on numbers or colors (🎮 Fun command - may move to 9kFun bot)'),
     aliases: ['!9k Roulette', '!9k Play Roulette', '!9k Spin'],
     execute(interaction, User, Bot) {
+        const isInteraction = interaction?.commandName !== undefined;
         const author = interaction.author || interaction.user;
         const cooldownkey = `Roulette-${author.id}`;
         if (CheckCoolDown(cooldownkey)) {
@@ -33,7 +34,12 @@ export default {
             const Embed = structuredClone(Bot.Embed);
             Embed.Title = ' Play Roulette?';
             Embed.Description = `Enter an amount of cash to bet! (Max ${maxbet})`;
-            interaction.channel.send({ embeds: [CreateEmbed(Embed)] }).then(Sent => {
+
+            const sendMessage = isInteraction
+                ? interaction.reply({ embeds: [CreateEmbed(Embed)], fetchReply: true })
+                : interaction.channel.send({ embeds: [CreateEmbed(Embed)] });
+
+            sendMessage.then(Sent => {
                 const interaction_filter = response => { return response.author.id === author.id };
                 Sent.channel.awaitMessages({ filter: interaction_filter, max: 1 }).then((collected) => {
                     const Bet = Math.floor(collected.first().content);

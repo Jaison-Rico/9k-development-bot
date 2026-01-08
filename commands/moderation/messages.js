@@ -10,6 +10,26 @@ async function processMessages(msg, type, display, temptime, selectedChannel, Bo
     const isInteraction = msg.commandName !== undefined || msg.isButton?.();
     const userId = isInteraction ? msg.user.id : msg.author.id;
     const channel = msg.channel;
+
+    // Message tracking can be disabled; avoid crashing when there is no data.
+    if (!Array.isArray(Bot.ServerMessages) || Bot.ServerMessages.length === 0) {
+        const Embed = structuredClone(Bot.Embed);
+        Embed.Title = msg.guild.name + " Top messages";
+        Embed.Description = "**Server Messages: 0**\n\nMessage tracking is disabled on this bot.";
+        Embed.Thumbnail = false;
+        Embed.Image = false;
+
+        if (isInteraction) {
+            if (msg.editReply) {
+                await msg.editReply({ embeds: [CreateEmbed(Embed)] });
+            } else {
+                await msg.reply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
+            }
+        } else {
+            channel.send({ embeds: [CreateEmbed(Embed)] });
+        }
+        return;
+    }
     
     const DetailUsers = [];
     const DayMessages = [];

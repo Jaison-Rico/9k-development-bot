@@ -3,7 +3,7 @@ import { Client, Events, GatewayIntentBits, EmbedBuilder, WebhookClient, Collect
 import fs from 'fs';
 import path from 'path';
 import  config  from './config.js';
-import { GetUser, AddUser, AddServerMessageSQL, SearchString, SaveBotUsers, ReturnDB, AlertCoolDown, SetCoolDown, CheckCoolDown, CheckMonthlyReset } from './utils/functions.js';
+import { GetUser, AddUser, SearchString, SaveBotUsers, ReturnDB, AlertCoolDown, SetCoolDown, CheckCoolDown, CheckMonthlyReset } from './utils/functions.js';
 import * as mysql2 from 'mysql2';
 import * as canvas from 'canvas';
 import * as ytSearch from 'yt-search';
@@ -105,7 +105,8 @@ for (const folder of commandFolders) {
 /* Init */
 ReturnDB('BotUsers', Bot).then(function (value) { Bot.Users = value });
 ReturnDB('BotServers', Bot).then(function (value) { Bot.Servers = value });
-ReturnDB('Messages', Bot).then(function (value) { Bot.ServerMessages = value });
+// Message logging/counting disabled (handled by another bot)
+Bot.ServerMessages = [];
 
 Bot.Client.once(Events.ClientReady, readyClient => {
         console.log(`Ready! Logged in as ${readyClient.user.tag}`);
@@ -121,7 +122,7 @@ Bot.Client.on('messageCreate', msg => {
                 User = {};
                 User.userid = msg.author.id;
                 User.exp = 0;
-               // User.messages = 0;
+                User.messages = 0;
                 User.cash = 0;
                 User.websiteuser = null;
                 Bot.Users.push(User);
@@ -131,14 +132,7 @@ Bot.Client.on('messageCreate', msg => {
         //User.messages += 1;
         if (msg.author.bot) { return }
 
-        const Entry = {};
-        Entry.serverid = msg.guildId;
-        Entry.userid = msg.author.id;
-        Entry.messageid = msg.id;
-        Entry.channelid = msg.channelId;
-        Entry.senton = msg.createdAt;
-        Bot.ServerMessages.push(Entry);
-        AddServerMessageSQL(Entry, Bot);
+        // Message logging/counting disabled (handled by another bot)
 
         const mtext = msg.content;
         const cooldownkey = `DefaultCmd-${msg.author.id}`;
@@ -257,7 +251,7 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                         User = {};
                         User.userid = interaction.user.id;
                         User.exp = 0;
-                      //  User.messages = 0;
+                        User.messages = 0;
                         User.cash = 0;
                         User.websiteuser = null;
                         Bot.Users.push(User);
