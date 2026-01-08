@@ -87,7 +87,10 @@ export function SaveBotUsers(Bot) {
     connection.connect();
     Bot.Users.forEach(function (value, index, array) {
         if (value.userid) {
-            connection.query('UPDATE BotUsers SET messages=' + value.messages + ', exp=' + value.exp + ', cash=' + value.cash + ' WHERE userid=' + value.userid + ';', function (error, results, fields) {
+            const messages = value.messages ?? 0;
+            const exp = value.exp ?? 0;
+            const cash = value.cash ?? 0;
+            connection.query('UPDATE BotUsers SET messages=' + messages + ', exp=' + exp + ', cash=' + cash + ' WHERE userid=' + value.userid + ';', function (error, results, fields) {
                 if (error) console.error('SaveBotUsers Error:', error);
                 console.log(results);
             });
