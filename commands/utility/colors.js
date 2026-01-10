@@ -171,13 +171,24 @@ export default {
 
         if (isInteraction) {
             await msg.deferReply();
-            const sub = msg.options.getSubcommand();
-            if (sub === 'list') {
-                return ListColorRoles(msg, Bot);
-            }
-            if (sub === 'assign') {
-                const role = msg.options.getRole('role');
-                return GiveColorRole(msg, Bot, role);
+            
+            try {
+                const sub = msg.options.getSubcommand();
+                if (sub === 'list') {
+                    return ListColorRoles(msg, Bot);
+                }
+                if (sub === 'assign') {
+                    const role = msg.options.getRole('role');
+                    return GiveColorRole(msg, Bot, role);
+                }
+            } catch (error) {
+                // No subcommand provided
+                const Embed = structuredClone(Bot.Embed);
+                Embed.Title = "❌ Subcommand Required";
+                Embed.Description = 'Please use one of the following subcommands:\n\n• `/colors list` - View all color roles\n• `/colors assign` - Assign a color role';
+                Embed.Thumbnail = false;
+                Embed.Image = false;
+                return msg.editReply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
             }
             return;
         }
