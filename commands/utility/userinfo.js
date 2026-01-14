@@ -47,6 +47,22 @@ function safeYesNo(value) {
     return 'Unknown';
 }
 
+function detectNitro(discordUser) {
+    // Bots can't reliably get premium_type, but we can detect indirect signals
+    if (!discordUser) return 'Unknown';
+    
+    const hasCustomBanner = discordUser.banner ? true : false;
+    const hasAnimatedAvatar = discordUser.avatar?.startsWith('a_') ?? false;
+    const hasAvatarDecoration = discordUser.avatarDecorationData ? true : false;
+    
+    // If any premium feature is present, likely has Nitro
+    if (hasCustomBanner || hasAnimatedAvatar || hasAvatarDecoration) {
+        return 'Yes';
+    }
+    
+    return 'No';
+}
+
 function buildOverviewBlock(member, discordUser, economyUser, dailyData) {
     const createdAt = discordUser?.createdAt;
     const joinedAt = member?.joinedAt;
@@ -66,26 +82,26 @@ function buildOverviewBlock(member, discordUser, economyUser, dailyData) {
     const lastClaim = dailyData?.last_daily_claim ? new Date(dailyData.last_daily_claim) : null;
 
     const lines = [
-        '**Economy**',
-        `Balance: ${balance}`,
-        `Website User: ${websiteUser}`,
-        `Daily Streak: ${dailyStreak} days`,
-        `Last Daily Claim: ${lastClaim ? formatDiscordDate(lastClaim) : 'Never'}`,
+        '__Economy__',
+        `**Balance:** ${balance}`,
+        `**Website User:** ${websiteUser}`,
+        `**Daily Streak:** ${dailyStreak} days`,
+        `**Last Daily Claim:** ${lastClaim ? formatDiscordDate(lastClaim) : 'Never'}`,
         '',
-        '**Dates**',
-        `Server Join: ${joinedAt ? formatDiscordDate(joinedAt) : 'Unknown'}`,
-        `Account Created: ${createdAt ? formatDiscordDate(createdAt) : 'Unknown'}`,
-        `Account Age: ${accountAgeDays !== null ? `${accountAgeDays} days` : 'Unknown'}`,
-        `Time in Server: ${serverAgeDays !== null ? `${serverAgeDays} days` : 'Unknown'}`,
+        '__Dates__',
+        `**Server Join:** ${joinedAt ? formatDiscordDate(joinedAt) : 'Unknown'}`,
+        `**Account Created:** ${createdAt ? formatDiscordDate(createdAt) : 'Unknown'}`,
+        `**Account Age:** ${accountAgeDays !== null ? `${accountAgeDays} days` : 'Unknown'}`,
+        `**Time in Server:** ${serverAgeDays !== null ? `${serverAgeDays} days` : 'Unknown'}`,
         '',
-        '**Subscription**',
-        `Boosting: ${boostingText}`,
+        '__Server__',
+        `**Server Boosting:** ${boostingText}`,
         '',
-        '**Extra**',
-        `User ID: ${discordUser?.id ?? 'Unknown'}`,
-        `Bot Account: ${discordUser?.bot ? 'Yes' : 'No'}`,
-        `Highest Role: ${highestRole ? highestRole.toString() : 'Unknown'}`,
-        `Roles: ${rolesCount !== null ? rolesCount : 'Unknown'}`
+        '__Extra__',
+        `**User ID:** \`${discordUser?.id ?? 'Unknown'}\``,
+        `**Bot Account:** ${discordUser?.bot ? 'Yes' : 'No'}`,
+        `**Highest Role:** ${highestRole ? highestRole.toString() : 'Unknown'}`,
+        `**Roles:** ${rolesCount !== null ? rolesCount : 'Unknown'}`
     ];
 
     return lines.join('\n');
@@ -118,22 +134,24 @@ async function buildAccountBlock(discordUser) {
 
     const bannerUrl = typeof fetched.bannerURL === 'function' ? fetched.bannerURL({ size: 1024 }) : null;
     const avatarUrl = typeof fetched.avatarURL === 'function' ? fetched.avatarURL({ size: 512 }) : null;
+    const nitroStatus = detectNitro(fetched);
 
     const lines = [
-        '**Identity**',
-        `Username: ${fetched.username ?? 'Unknown'}`,
-        `Global Name: ${fetched.globalName ?? 'None'}`,
-        `User ID: ${fetched.id ?? 'Unknown'}`,
-        `Bot Account: ${fetched.bot ? 'Yes' : 'No'}`,
+        '__Identity__',
+        `**Username:** ${fetched.username ?? 'Unknown'}`,
+        `**Global Name:** ${fetched.globalName ?? 'None'}`,
+        `**User ID:** \`${fetched.id ?? 'Unknown'}\``,
+        `**Bot Account:** ${fetched.bot ? 'Yes' : 'No'}`,
         '',
-        '**Account**',
-        `Created: ${createdAt ? formatDiscordDate(createdAt) : 'Unknown'}`,
-        `Account Age: ${accountAgeDays !== null ? `${accountAgeDays} days` : 'Unknown'}`,
-        `Badges: ${badges ? (badges.length ? badges.join(', ') : 'None') : 'Unknown'}`,
+        '__Account__',
+        `**Created:** ${createdAt ? formatDiscordDate(createdAt) : 'Unknown'}`,
+        `**Account Age:** ${accountAgeDays !== null ? `${accountAgeDays} days` : 'Unknown'}`,
+        `**Nitro:** ${nitroStatus}`,
+        `**Badges:** ${badges ? (badges.length ? badges.join(', ') : 'None') : 'Unknown'}`,
         '',
-        '**Media**',
-        `Avatar URL: ${avatarUrl ?? 'Unknown'}`,
-        `Banner URL: ${bannerUrl ?? 'None'}`
+        '__Media__',
+        `**Avatar URL:** ${avatarUrl ?? 'Unknown'}`,
+        `**Banner URL:** ${bannerUrl ?? 'None'}`
     ];
 
     return lines.join('\n');
@@ -152,9 +170,9 @@ function buildRolesBlock(member) {
 
     const max = 25;
     const shown = roleMentions.slice(0, max);
-    const extra = roleMentions.length > max ? `\n\nShowing ${max}/${roleMentions.length} roles.` : '';
+    const extra = roleMentions.length > max ? `\n\n*Showing ${max}/${roleMentions.length} roles*` : '';
 
-    return `**Roles**\n${shown.join(' ')}${extra}`;
+    return `__Roles__\n${shown.join(' ')}${extra}`;
 }
 
 function buildModerationBlock(member) {
@@ -176,16 +194,16 @@ function buildModerationBlock(member) {
     ].map(([label, perm]) => `${label}: ${member.permissions?.has?.(perm) ? 'Yes' : 'No'}`);
 
     const lines = [
-        '**Server Profile**',
-        `Display Name: ${member.displayName ?? 'Unknown'}`,
-        `Nickname: ${member.nickname ?? 'None'}`,
-        `Pending Screening: ${safeYesNo(member.pending)}`,
+        '__Server Profile__',
+        `**Display Name:** ${member.displayName ?? 'Unknown'}`,
+        `**Nickname:** ${member.nickname ?? 'None'}`,
+        `**Pending Screening:** ${safeYesNo(member.pending)}`,
         '',
-        '**Moderation**',
-        `Timed Out: ${isTimedOut ? 'Yes' : 'No'}`,
-        `Timeout Until: ${timeoutUntil ? formatDiscordDate(timeoutUntil) : 'None'}`,
+        '__Moderation__',
+        `**Timed Out:** ${isTimedOut ? 'Yes' : 'No'}`,
+        `**Timeout Until:** ${timeoutUntil ? formatDiscordDate(timeoutUntil) : 'None'}`,
         '',
-        '**Key Permissions**',
+        '__Key Permissions__',
         ...keyPerms
     ];
 
@@ -202,16 +220,16 @@ function buildVoiceBlock(member) {
     if (!channel) return 'Not in a voice channel.';
 
     const lines = [
-        '**Voice**',
-        `Channel: ${channel.name} (${channel.id})`,
-        `Server Muted: ${safeYesNo(v.serverMute)}`,
-        `Server Deafened: ${safeYesNo(v.serverDeaf)}`,
-        `Self Muted: ${safeYesNo(v.selfMute)}`,
-        `Self Deafened: ${safeYesNo(v.selfDeaf)}`,
-        `Streaming: ${safeYesNo(v.streaming)}`,
-        `Video: ${safeYesNo(v.selfVideo)}`,
-        `Suppressed: ${safeYesNo(v.suppress)}`,
-        `Request To Speak: ${v.requestToSpeakTimestamp ? `<t:${Math.floor(v.requestToSpeakTimestamp / 1000)}:F>` : 'None'}`
+        '__Voice__',
+        `**Channel:** ${channel.name} (\`${channel.id}\`)`,
+        `**Server Muted:** ${safeYesNo(v.serverMute)}`,
+        `**Server Deafened:** ${safeYesNo(v.serverDeaf)}`,
+        `**Self Muted:** ${safeYesNo(v.selfMute)}`,
+        `**Self Deafened:** ${safeYesNo(v.selfDeaf)}`,
+        `**Streaming:** ${safeYesNo(v.streaming)}`,
+        `**Video:** ${safeYesNo(v.selfVideo)}`,
+        `**Suppressed:** ${safeYesNo(v.suppress)}`,
+        `**Request To Speak:** ${v.requestToSpeakTimestamp ? `<t:${Math.floor(v.requestToSpeakTimestamp / 1000)}:F>` : 'None'}`
     ];
 
     return lines.join('\n');
@@ -224,7 +242,8 @@ async function buildPageEmbed(page, Bot, member, discordUser, economyUser, daily
     const pageTitle = page.charAt(0).toUpperCase() + page.slice(1);
     Embed.Title = `User Info (${pageTitle}): ${username}`;
 
-    Embed.Image = discordUser?.avatarURL?.({ size: 512 }) ?? discordUser?.avatarURL?.() ?? null;
+    Embed.Thumbnail = discordUser?.avatarURL?.({ size: 512 }) ?? discordUser?.avatarURL?.() ?? false;
+    Embed.Image = false;
 
     if (page === 'account') {
         Embed.Description = await buildAccountBlock(discordUser);
@@ -321,12 +340,17 @@ export default {
         const economyUser = (targetId === viewerId) ? User : GetUser(targetId, Bot);
         const dailyData = await GetUserDailyData(targetId, Bot);
 
+        // Fix: ensure we have a fresh GuildMember on first render (not only after pressing buttons)
+        // This avoids showing "Unknown" for server-related fields due to missing member data.
+        const member = targetMember ?? await msg.guild?.members?.fetch(targetId).catch(() => null);
+
         const initialPage = 'overview';
-        const Embed = await buildPageEmbed(initialPage, Bot, targetMember, discordUser, economyUser, dailyData);
+        const Embed = await buildPageEmbed(initialPage, Bot, member, discordUser, economyUser, dailyData);
         const components = buildComponents(viewerId, targetId, initialPage);
 
         if (isInteraction) {
-            return msg.reply({ embeds: [CreateEmbed(Embed)], components });
+            await msg.deferReply();
+            return msg.editReply({ embeds: [CreateEmbed(Embed)], components });
         }
         return msg.channel.send({ embeds: [CreateEmbed(Embed)], components });
     }
