@@ -223,6 +223,15 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                                         console.error('Button interaction error:', error);
                                 }
                         }
+                } else if (customId.startsWith('userinfo:')) {
+                        const command = Bot.Commands.get('userinfo');
+                        if (command) {
+                                try {
+                                        await command.execute(interaction, User, Bot);
+                                } catch (error) {
+                                        console.error('Button interaction error:', error);
+                                }
+                        }
                 }
                 return;
         }
