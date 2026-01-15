@@ -1,7 +1,7 @@
-import { CreateEmbed, SearchString } from '../../utils/functions.js';
+import { CreateEmbed, SearchString, GetShopItems, DecrementShopStock } from '../../utils/functions.js';
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from 'discord.js';
 
-function ListShopItems(msgOrInteraction, Bot) {
+async function ListShopItems(msgOrInteraction, Bot) {
     const Embed = structuredClone(Bot.Embed);
 
     // Get guild name from either message or interaction
@@ -12,20 +12,28 @@ function ListShopItems(msgOrInteraction, Bot) {
 
 `;
     
-    // Build item list with better formatting
-    Bot.Shop.Items.forEach(function (Item, ind) {
-        let StockRes = Item.LimitedStock;
-        if (Item.LimitedStock === false) {
-            StockRes = 'Unlimited';
-        }
-        Embed.Description += `**${ind + 1}. ${Item.Title}** - ${Item.Price}
-*${Item.Desc}*
+    // Fetch items from database
+    const items = await GetShopItems(Bot);
+    
+    if (items.length === 0) {
+        Embed.Description = "No items available in the shop right now. Check back later!";
+    } else {
+        // Build item list with better formatting
+        items.forEach(function (item, ind) {
+            let StockRes = item.stock;
+            if (item.stock === -1) {
+                StockRes = 'Unlimited';
+            }
+            Embed.Description += `**${ind + 1}. ${item.title}** - ${item.price}
+*${item.description}*
 Stock: ${StockRes}
 
 `;
-    });
+        });
 
-    Embed.Description += `*Click the buttons below to purchase items directly!*`;
+        Embed.Description += `*Click the buttons below to purchase items directly!*`;
+    }
+    
     Embed.Thumbnail = false;
     Embed.Image = false;
 
@@ -34,13 +42,13 @@ Stock: ${StockRes}
     const maxButtonsPerRow = 5;
     const rows = [];
     
-    Bot.Shop.Items.forEach(function (Item, ind) {
+    items.forEach(function (item, ind) {
         if (ind < 20) { // Discord limit of 25 components, keep some space
-            const isOutOfStock = Item.LimitedStock !== false && Item.LimitedStock <= 0;
+            const isOutOfStock = item.stock !== -1 && item.stock <= 0;
             buttons.push(
                 new ButtonBuilder()
-                    .setCustomId(`shop_buy_${ind}`)
-                    .setLabel(`${ind + 1}. ${Item.Title} (${Item.Price})`)
+                    .setCustomId(`shop_buy_${item.id}`)
+                    .setLabel(`${ind + 1}. ${item.title} (${item.price})`)
                     .setStyle(isOutOfStock ? ButtonStyle.Danger : ButtonStyle.Primary)
                     .setDisabled(isOutOfStock)
             );
@@ -65,18 +73,32 @@ Stock: ${StockRes}
     }
 }
 
-function processPurchase(msg, user, Bot, Item, itemIndex) {
+async function processPurchase(msg, user, Bot, item) {
     const isInteraction = msg.commandName !== undefined || msg.isButton !== undefined;
     const userId = msg.user ? msg.user.id : msg.author.id;
     const channel = msg.channel;
 
     // Check stock
-    if (Item.LimitedStock !== false) {
-        if (Item.LimitedStock >= 1) {
-            Item.LimitedStock += -1;
+    if (item.stock !== -1) {
+        if (item.stock >= 1) {
+            // Decrement stock in database
+            const stockUpdate = await DecrementShopStock(item.id, Bot);
+            if (!stockUpdate.success) {
+                const Embed = structuredClone(Bot.Embed);
+                Embed.Title = item.title + " Out of stock.";
+                Embed.Description = 'This item is no longer available.';
+                Embed.Thumbnail = false;
+                Embed.Image = false;
+                
+                if (isInteraction) {
+                    if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
+                    return msg.reply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
+                }
+                return channel.send({ embeds: [CreateEmbed(Embed)] });
+            }
         } else {
             const Embed = structuredClone(Bot.Embed);
-            Embed.Title = Item.Title + " Out of stock.";
+            Embed.Title = item.title + " Out of stock.";
             Embed.Description = 'Maybe we will add more later sowwy.';
             Embed.Thumbnail = false;
             Embed.Image = false;
@@ -90,24 +112,24 @@ function processPurchase(msg, user, Bot, Item, itemIndex) {
     }
 
     // Check if user has enough cash
-    if (user.cash >= Item.Price) {
+    if (user.cash >= item.price) {
         const Embed = structuredClone(Bot.Embed);
         Embed.Title = `Item Purchased!`;
-        Embed.Description = `**${Item.Title}**
+        Embed.Description = `**${item.title}**
 
-You spent: ${Item.Price}
-New balance: ${user.cash - Item.Price}`;
+You spent: ${item.price}
+New balance: ${user.cash - item.price}`;
         Embed.Thumbnail = false;
         Embed.Image = false;
 
-        if (Item.Role) {
+        if (item.item_type === 'role' && item.role_name) {
             // Check if user already has the role
-            const role = msg.guild.roles.cache.find(r => r.name === Item.Role);
+            const role = msg.guild.roles.cache.find(r => r.name === item.role_name);
             const member = isInteraction ? msg.member : msg.member;
             
             if (!role) {
                 Embed.Title = 'Purchase Failed';
-                Embed.Description = `The role "${Item.Role}" doesn't exist on this server.`;
+                Embed.Description = `The role "${item.role_name}" doesn't exist on this server.`;
                 
                 if (isInteraction) {
                     if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
@@ -118,7 +140,7 @@ New balance: ${user.cash - Item.Price}`;
             
             if (member.roles.cache.has(role.id)) {
                 Embed.Title = 'Already Owned';
-                Embed.Description = `You already have the **${Item.Title}** role!`;
+                Embed.Description = `You already have the **${item.title}** role!`;
                 
                 if (isInteraction) {
                     if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
@@ -130,8 +152,8 @@ New balance: ${user.cash - Item.Price}`;
             // Add role
             try {
                 member.roles.add(role).then(() => {
-                    user.cash += -Item.Price;
-                    Bot.Shop.Bank.BotCash += Item.Price;
+                    user.cash += -item.price;
+                    Bot.Shop.Bank.BotCash += item.price;
                     
                     if (isInteraction) {
                         if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
@@ -150,12 +172,13 @@ New balance: ${user.cash - Item.Price}`;
                 channel.send({ embeds: [CreateEmbed(Embed)] });
             }
         } else {
+            // Manual item - send webhook notification
             Bot.WebHooks.Team.send({
-                content: `<@${userId}> Bought ${Item.Title}`,
+                content: `<@${userId}> Bought ${item.title}`,
                 username: '9k Shop'
             }).then(() => {
-                user.cash += -Item.Price;
-                Bot.Shop.Bank.BotCash += Item.Price;
+                user.cash += -item.price;
+                Bot.Shop.Bank.BotCash += item.price;
                 
                 if (isInteraction) {
                     if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
@@ -176,9 +199,9 @@ New balance: ${user.cash - Item.Price}`;
     } else {
         const Embed = structuredClone(Bot.Embed);
         Embed.Title = "Insufficient Funds";
-        Embed.Description = `You need ${Item.Price} but only have ${user.cash}
+        Embed.Description = `You need ${item.price} but only have ${user.cash}
 
-Need ${Item.Price - user.cash} more!`;
+Need ${item.price - user.cash} more!`;
         Embed.Thumbnail = false;
         Embed.Image = false;
         
@@ -201,20 +224,23 @@ export default {
         if (interaction.isButton && interaction.isButton()) {
             const customId = interaction.customId;
             if (customId.startsWith('shop_buy_')) {
-                const itemIndex = parseInt(customId.split('_')[2]);
+                const itemId = parseInt(customId.split('_')[2]);
                 await interaction.deferReply();
                 
-                const Item = Bot.Shop.Items[itemIndex];
-                if (!Item) {
+                // Fetch items from database
+                const items = await GetShopItems(Bot);
+                const item = items.find(i => i.id === itemId);
+                
+                if (!item) {
                     const Embed = structuredClone(Bot.Embed);
                     Embed.Title = "Item Not Found";
-                    Embed.Description = `Could not find item at index ${itemIndex}.`;
+                    Embed.Description = `Could not find item with ID ${itemId}.`;
                     Embed.Thumbnail = false;
                     Embed.Image = false;
                     return interaction.editReply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
                 }
                 
-                return processPurchase(interaction, User, Bot, Item, itemIndex);
+                return processPurchase(interaction, User, Bot, item);
             }
         }
 

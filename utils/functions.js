@@ -420,3 +420,178 @@ export function SaveUserDaily(User, dailyData, Bot) {
     connection.on('error', function (err) { console.error('Db Error:', err); });
     connection.end();
 }
+
+/* Shop Inventory System Functions */
+
+export function GetShopItems(Bot) {
+    return new Promise((resolve, reject) => {
+        const connection = ConnectDB(Bot);
+        connection.query(
+            'SELECT * FROM ShopItem WHERE active = 1 ORDER BY id ASC',
+            function (error, results, fields) {
+                connection.end();
+                if (error) {
+                    console.error('GetShopItems Error:', error);
+                    resolve([]);
+                } else {
+                    resolve(results || []);
+                }
+            }
+        );
+    });
+}
+
+export function GetShopItemById(itemId, Bot) {
+    return new Promise((resolve, reject) => {
+        const connection = ConnectDB(Bot);
+        connection.query(
+            'SELECT * FROM ShopItem WHERE id = ? LIMIT 1',
+            [itemId],
+            function (error, results, fields) {
+                connection.end();
+                if (error) {
+                    console.error('GetShopItemById Error:', error);
+                    resolve(null);
+                } else {
+                    resolve(results.length > 0 ? results[0] : null);
+                }
+            }
+        );
+    });
+}
+
+export function AddShopItem(itemData, Bot) {
+    return new Promise((resolve, reject) => {
+        const connection = ConnectDB(Bot);
+        connection.connect();
+        
+        const query = `INSERT INTO ShopItem (title, description, price, stock, item_type, role_name, active) 
+                       VALUES (?, ?, ?, ?, ?, ?, 1)`;
+        
+        connection.query(
+            query,
+            [
+                itemData.title,
+                itemData.description,
+                itemData.price,
+                itemData.stock,
+                itemData.item_type,
+                itemData.role_name || null
+            ],
+            function (error, results, fields) {
+                connection.end();
+                if (error) {
+                    console.error('AddShopItem Error:', error);
+                    reject(error);
+                } else {
+                    resolve({
+                        success: true,
+                        itemId: results.insertId
+                    });
+                }
+            }
+        );
+        
+        connection.on('error', function (err) {
+            console.error('Db Error:', err);
+            reject(err);
+        });
+    });
+}
+
+export function UpdateShopStock(itemId, newStock, Bot) {
+    return new Promise((resolve, reject) => {
+        const connection = ConnectDB(Bot);
+        connection.connect();
+        
+        const query = 'UPDATE ShopItem SET stock = stock + ? WHERE id = ?';
+        
+        connection.query(query, [newStock, itemId], function (error, results, fields) {
+            connection.end();
+            if (error) {
+                console.error('UpdateShopStock Error:', error);
+                reject(error);
+            } else {
+                resolve({
+                    success: true,
+                    affectedRows: results.affectedRows
+                });
+            }
+        });
+        
+        connection.on('error', function (err) {
+            console.error('Db Error:', err);
+            reject(err);
+        });
+    });
+}
+
+export function DecrementShopStock(itemId, Bot) {
+    return new Promise((resolve, reject) => {
+        const connection = ConnectDB(Bot);
+        connection.connect();
+        
+        const query = 'UPDATE ShopItem SET stock = stock - 1 WHERE id = ? AND stock > 0';
+        
+        connection.query(query, [itemId], function (error, results, fields) {
+            connection.end();
+            if (error) {
+                console.error('DecrementShopStock Error:', error);
+                reject(error);
+            } else {
+                resolve({
+                    success: results.affectedRows > 0
+                });
+            }
+        });
+        
+        connection.on('error', function (err) {
+            console.error('Db Error:', err);
+            reject(err);
+        });
+    });
+}
+
+export function GetAllShopItems(Bot) {
+    return new Promise((resolve, reject) => {
+        const connection = ConnectDB(Bot);
+        connection.query(
+            'SELECT * FROM ShopItem ORDER BY id ASC',
+            function (error, results, fields) {
+                connection.end();
+                if (error) {
+                    console.error('GetAllShopItems Error:', error);
+                    resolve([]);
+                } else {
+                    resolve(results || []);
+                }
+            }
+        );
+    });
+}
+
+export function DeleteShopItem(itemId, Bot) {
+    return new Promise((resolve, reject) => {
+        const connection = ConnectDB(Bot);
+        connection.connect();
+        
+        const query = 'DELETE FROM ShopItem WHERE id = ?';
+        
+        connection.query(query, [itemId], function (error, results, fields) {
+            connection.end();
+            if (error) {
+                console.error('DeleteShopItem Error:', error);
+                reject(error);
+            } else {
+                resolve({
+                    success: results.affectedRows > 0
+                });
+            }
+        });
+        
+        connection.on('error', function (err) {
+            console.error('Db Error:', err);
+            reject(err);
+        });
+    });
+}
