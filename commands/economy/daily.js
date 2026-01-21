@@ -2,37 +2,24 @@ import { CreateEmbed, GetUserDailyData, SaveUserDaily } from '../../utils/functi
 import { SlashCommandBuilder } from 'discord.js';
 
 // Daily Rewards Configuration - Easy to modify
+// Formula: Total reward = basePoints + streak days
 const DailyRewards = {
     Tier1: {
         name: 'Beginner',
         minDays: 1,
         maxDays: 30,
+        basePoints: 10,  // Base points for this tier
         rewards: [
-            { type: 'cash', amount: 10, chance: 100 }
+            { type: 'cash', chance: 100 }
         ]
     },
     Tier2: {
         name: 'Dedicated',
         minDays: 31,
-        maxDays: 60,
-        rewards: [
-            { type: 'cash', amount: 20, chance: 100 }
-        ]
-    },
-    Tier3: {
-        name: 'Elite',
-        minDays: 61,
-        maxDays: 90,
-        rewards: [
-            { type: 'cash', amount: 30, chance: 100 }
-        ]
-    },
-    Tier4: {
-        name: 'Legendary',
-        minDays: 91,
         maxDays: null, // No maximum
+        basePoints: 30,  // Base points for this tier
         rewards: [
-            { type: 'cash', amount: 40, chance: 100 }
+            { type: 'cash', chance: 100 }
         ]
     }
 };
@@ -67,14 +54,17 @@ function getNextTierInfo(currentTier, streak) {
 }
 
 // Process rewards and return total cash
-function processRewards(tier) {
+// Formula: totalCash = tier.basePoints + streak days
+function processRewards(tier, streak) {
     let totalCash = 0;
     const rewardMessages = [];
     
     for (const reward of tier.rewards) {
         if (reward.type === 'cash') {
-            totalCash += reward.amount;
-            rewardMessages.push(`+${reward.amount} cash`);
+            // Calculate: base points + streak days
+            const cashAmount = tier.basePoints + streak;
+            totalCash += cashAmount;
+            rewardMessages.push(`+${cashAmount} cash (${tier.basePoints} base + ${streak} streak)`);
         }
         // Future: Add other reward types here (roles, backgrounds, etc.)
     }
@@ -112,7 +102,7 @@ export default {
             if (!lastClaim) {
                 currentStreak = 1;
                 const tier = getTierByStreak(currentStreak);
-                const { totalCash, rewardMessages } = processRewards(tier);
+                const { totalCash, rewardMessages } = processRewards(tier, currentStreak);
                 const nextTierInfo = getNextTierInfo(tier, currentStreak);
                 
                 User.cash += totalCash;
@@ -167,7 +157,7 @@ export default {
                 currentStreak += 1;
                 const oldTier = getTierByStreak(oldStreak);
                 const newTier = getTierByStreak(currentStreak);
-                const { totalCash, rewardMessages } = processRewards(newTier);
+                const { totalCash, rewardMessages } = processRewards(newTier, currentStreak);
                 const nextTierInfo = getNextTierInfo(newTier, currentStreak);
                 
                 User.cash += totalCash;
@@ -206,7 +196,7 @@ export default {
             if (timeDiff >= 48) {
                 currentStreak = 1;
                 const tier = getTierByStreak(currentStreak);
-                const { totalCash, rewardMessages } = processRewards(tier);
+                const { totalCash, rewardMessages } = processRewards(tier, currentStreak);
                 const nextTierInfo = getNextTierInfo(tier, currentStreak);
                 
                 User.cash += totalCash;
