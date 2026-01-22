@@ -1,140 +1,260 @@
 import { CreateEmbed, SearchString } from '../../utils/functions.js';
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ComponentType } from 'discord.js';
 
-function ListColorRoles(msg, Bot) {
-    const ColorRoles = [];
-    msg.guild.roles.fetch().then(Roles => {
-        Roles.forEach(function (Role) {
-            if (SearchString(Role.name, ['!9kColor-'])) {
-                ColorRoles.push(Role);
-            }
-        });
-        
-        const Embed = structuredClone(Bot.Embed);
-        Embed.Title = msg.guild.name + " Color Roles!";
-        Embed.Description = `**Available Color Roles:**
+// Configuration
+const BUTTONS_PER_ROW = 4;
+const MAX_ROWS = 5; // Discord limit
+const NAV_ROW = 1; // Navigation buttons take 1 row
 
-`;
+// Get all color roles from guild
+async function getAllColorRoles(guild) {
+    const roles = await guild.roles.fetch();
+    const colorRoles = [];
+    
+    roles.forEach(role => {
+        if (SearchString(role.name, ['!9kColor-'])) {
+            colorRoles.push(role);
+        }
+    });
+    
+    return colorRoles.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Get user's current color roles
+function getUserColorRoles(member) {
+    const userColorRoles = [];
+    
+    member.roles.cache.forEach(role => {
+        if (SearchString(role.name, ['!9kColor-'])) {
+            userColorRoles.push(role);
+        }
+    });
+    
+    return userColorRoles;
+}
+
+// Create stacked preview of user's current colors
+function createColorPreview(userColorRoles) {
+    if (userColorRoles.length === 0) {
+        return '*No color roles assigned*';
+    }
+    
+    // Create stacked mentions without spaces
+    return userColorRoles.map(role => `<@&${role.id}>`).join('');
+}
+
+// Display color roles with pagination
+async function showColorMenu(msg, Bot, page = 0) {
+    const isInteraction = msg.commandName !== undefined;
+    const member = msg.member;
+    
+    try {
+        const allColorRoles = await getAllColorRoles(msg.guild);
+        const userColorRoles = getUserColorRoles(member);
         
-        // INTERACTIVE IMPROVEMENT: Better role display with colors
-        ColorRoles.forEach(function (Role, index) {
-            const colorName = Role.name.replace('!9kColor-', '');
-            Embed.Description += `**${index + 1}.** ${colorName} <@&${Role.id}>
-`;
+        // Calculate how many colors we can show per page
+        // If we need pagination, reserve 1 row for nav buttons
+        const totalPages = Math.ceil(allColorRoles.length / ((MAX_ROWS - NAV_ROW) * BUTTONS_PER_ROW));
+        const needsPagination = totalPages > 1;
+        const availableRows = needsPagination ? MAX_ROWS - NAV_ROW : MAX_ROWS;
+        const colorsPerPage = availableRows * BUTTONS_PER_ROW;
+        
+        // Recalculate with correct colors per page
+        const actualTotalPages = Math.ceil(allColorRoles.length / colorsPerPage);
+        const currentPage = Math.max(0, Math.min(page, actualTotalPages - 1));
+        const startIndex = currentPage * colorsPerPage;
+        const endIndex = Math.min(startIndex + colorsPerPage, allColorRoles.length);
+        const pageRoles = allColorRoles.slice(startIndex, endIndex);
+        
+        // Create embed
+        const Embed = structuredClone(Bot.Embed);
+        Embed.Title = '🎨 Color Roles';
+        
+        // Show current color preview (stacked)
+        const colorPreview = createColorPreview(userColorRoles);
+        Embed.Description = `**Your Current Colors:**\n${colorPreview}\n\n`;
+        
+        // Show available colors on this page (only pings, no names or numbers)
+        Embed.Description += `**Available Colors**`;
+        if (actualTotalPages > 1) {
+            Embed.Description += ` (Page ${currentPage + 1}/${actualTotalPages})`;
+        }
+        Embed.Description += `:\n`;
+        
+        pageRoles.forEach((role) => {
+            Embed.Description += `<@&${role.id}> `;
         });
         
-        Embed.Description += `
-💡 *Click the buttons below to get a color role, or use text commands for compatibility*`;
+        Embed.Description += `\n\n💡 *Click a button below to apply a color role*`;
         Embed.Thumbnail = false;
         Embed.Image = false;
-
-        // INTERACTIVE IMPROVEMENT: Create color role buttons
-        const buttons = [];
-        const maxButtonsPerRow = 4;
-        const rows = [];
         
-        ColorRoles.forEach(function (Role, index) {
-            if (index < 20) { // Discord component limit
-                const colorName = Role.name.replace('!9kColor-', '');
-                buttons.push(
-                    new ButtonBuilder()
-                        .setCustomId(`color_assign_${Role.id}`)
-                        .setLabel(colorName)
-                        .setStyle(ButtonStyle.Secondary)
-                );
-            }
+        // Create buttons for color roles on this page
+        const rows = [];
+        const colorButtons = [];
+        
+        pageRoles.forEach(role => {
+            const colorName = role.name.replace('!9kColor-', '');
+            colorButtons.push(
+                new ButtonBuilder()
+                    .setCustomId(`color_assign_${role.id}`)
+                    .setLabel(colorName)
+                    .setStyle(ButtonStyle.Primary)
+            );
         });
-
-        // Split buttons into rows
-        for (let i = 0; i < buttons.length; i += maxButtonsPerRow) {
-            const rowButtons = buttons.slice(i, i + maxButtonsPerRow);
+        
+        // Split color buttons into rows
+        for (let i = 0; i < colorButtons.length; i += BUTTONS_PER_ROW) {
+            const rowButtons = colorButtons.slice(i, i + BUTTONS_PER_ROW);
             rows.push(new ActionRowBuilder().addComponents(rowButtons));
         }
-
-        const isInteraction = msg.commandName !== undefined;
+        
+        // Add navigation buttons if needed
+        if (needsPagination) {
+            const navButtons = [];
+            
+            navButtons.push(
+                new ButtonBuilder()
+                    .setCustomId(`color_page_${currentPage - 1}`)
+                    .setLabel('◀ Previous')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(currentPage === 0)
+            );
+            
+            navButtons.push(
+                new ButtonBuilder()
+                    .setCustomId(`color_page_${currentPage + 1}`)
+                    .setLabel('Next ▶')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(currentPage === actualTotalPages - 1)
+            );
+            
+            rows.push(new ActionRowBuilder().addComponents(navButtons));
+        }
+        
+        // Ensure we don't exceed Discord's limit of 5 rows
+        if (rows.length > MAX_ROWS) {
+            console.error(`Too many component rows: ${rows.length}. Limiting to ${MAX_ROWS}`);
+            rows.splice(MAX_ROWS);
+        }
+        
+        // Send or update message
         if (isInteraction) {
-            if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)], components: rows });
+            if (msg.deferred || msg.replied) {
+                return msg.editReply({ embeds: [CreateEmbed(Embed)], components: rows });
+            }
             return msg.reply({ embeds: [CreateEmbed(Embed)], components: rows });
         }
         return msg.channel.send({ embeds: [CreateEmbed(Embed)], components: rows });
-    });
+        
+    } catch (error) {
+        console.error('Error showing color menu:', error);
+        const ErrorEmbed = structuredClone(Bot.Embed);
+        ErrorEmbed.Color = 15548997;
+        ErrorEmbed.Title = '❌ Error';
+        ErrorEmbed.Description = 'Could not load color roles. Please try again.';
+        
+        if (isInteraction) {
+            if (msg.deferred || msg.replied) {
+                return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+            }
+            return msg.reply({ embeds: [CreateEmbed(ErrorEmbed)], ephemeral: true });
+        }
+        return msg.channel.send({ embeds: [CreateEmbed(ErrorEmbed)] });
+    }
 }
 
-function GiveColorRole(msg, Bot, roleFromSlash, roleId = null) {
-    const isInteraction = msg.commandName !== undefined;
-    let RoleRes = 'Removed:';
-    let duplicate = false;
-    
-    // INTERACTIVE IMPROVEMENT: Handle role selection from button or parameter
-    let Role = roleFromSlash;
-    if (roleId) {
-        Role = msg.guild.roles.cache.get(roleId);
-    } else if (!Role) {
-        Role = msg.mentions.roles.first();
-    }
-    
-    if (Role) {
-        if (SearchString(Role.name, ['!9kColor-'])) {
-            // Remove existing color roles
-            msg.member.roles.cache.each(UserRole => {
-                if (SearchString(UserRole.name, ['!9kColor-'])) {
-                    if (UserRole.name == Role.name) {
-                        duplicate = true;
-                    }
-                    msg.member.roles.remove(UserRole);
-                    RoleRes += ' ' + UserRole.name + ',';
-                }
-            });
-            
-            // Add new role if not duplicate
-            if (duplicate == false) {
-                msg.member.roles.add(Role);
-            }
 
-            const Embed = structuredClone(Bot.Embed);
-            const colorName = Role.name.replace('!9kColor-', '');
-            
-            if (duplicate) {
-                Embed.Title = `🎨 Color Role Removed`;
-                Embed.Description = `Removed **${colorName}** color role.`;
-            } else {
-                Embed.Title = `🎨 Color Role Applied`;
-                Embed.Description = `You now have the **${colorName}** color role!
-${RoleRes !== 'Removed:' ? `\nPrevious roles removed: ${RoleRes}` : ''}`;
-            }
-            
-            Embed.Thumbnail = false;
-            Embed.Image = false;
+// Assign color role to user
+async function assignColorRole(msg, Bot, roleId) {
+    const isInteraction = msg.commandName !== undefined || msg.isButton?.();
+    const member = msg.member;
+    
+    try {
+        const role = msg.guild.roles.cache.get(roleId);
+        
+        if (!role) {
+            const ErrorEmbed = structuredClone(Bot.Embed);
+            ErrorEmbed.Color = 15548997;
+            ErrorEmbed.Title = '❌ Role Not Found';
+            ErrorEmbed.Description = 'Could not find the selected color role.';
             
             if (isInteraction) {
-                if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
-                return msg.reply({ embeds: [CreateEmbed(Embed)] });
+                if (msg.deferred || msg.replied) {
+                    return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+                }
+                return msg.reply({ embeds: [CreateEmbed(ErrorEmbed)], ephemeral: true });
             }
-            return msg.channel.send({ embeds: [CreateEmbed(Embed)] });
+            return msg.channel.send({ embeds: [CreateEmbed(ErrorEmbed)] });
         }
-        else {
-            const Embed = structuredClone(Bot.Embed);
-            Embed.Title = "❌ Invalid Color Role";
-            Embed.Description = 'Please select a valid color role. Use `/colors list` to see available colors.';
-            Embed.Thumbnail = false;
-            Embed.Image = false;
+        
+        if (!SearchString(role.name, ['!9kColor-'])) {
+            const ErrorEmbed = structuredClone(Bot.Embed);
+            ErrorEmbed.Color = 15548997;
+            ErrorEmbed.Title = '❌ Invalid Role';
+            ErrorEmbed.Description = 'This is not a valid color role.';
+            
             if (isInteraction) {
-                if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
-                return msg.reply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
+                if (msg.deferred || msg.replied) {
+                    return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+                }
+                return msg.reply({ embeds: [CreateEmbed(ErrorEmbed)], ephemeral: true });
             }
-            return msg.channel.send({ embeds: [CreateEmbed(Embed)] });
+            return msg.channel.send({ embeds: [CreateEmbed(ErrorEmbed)] });
         }
-    } else {
+        
+        // Check if user already has this role
+        const hasRole = member.roles.cache.has(roleId);
+        
+        // Remove all color roles
+        const userColorRoles = getUserColorRoles(member);
+        for (const userRole of userColorRoles) {
+            await member.roles.remove(userRole);
+        }
+        
+        // Add new role if it wasn't already assigned
+        if (!hasRole) {
+            await member.roles.add(role);
+        }
+        
         const Embed = structuredClone(Bot.Embed);
-        Embed.Title = "❌ No Role Selected";
-        Embed.Description = 'Please select a color role to assign.';
+        const colorName = role.name.replace('!9kColor-', '');
+        
+        if (hasRole) {
+            Embed.Color = 15844367; // Orange
+            Embed.Title = '🎨 Color Role Removed';
+            Embed.Description = `Removed **${colorName}** color role.`;
+        } else {
+            Embed.Color = 5763719; // Green
+            Embed.Title = '🎨 Color Role Applied';
+            Embed.Description = `You now have the **${colorName}** color role!\n\n**Preview:** <@&${role.id}>`;
+        }
+        
         Embed.Thumbnail = false;
         Embed.Image = false;
+        
         if (isInteraction) {
-            if (msg.deferred || msg.replied) return msg.editReply({ embeds: [CreateEmbed(Embed)] });
-            return msg.reply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
+            if (msg.deferred || msg.replied) {
+                return msg.editReply({ embeds: [CreateEmbed(Embed)], components: [] });
+            }
+            return msg.reply({ embeds: [CreateEmbed(Embed)] });
         }
         return msg.channel.send({ embeds: [CreateEmbed(Embed)] });
+        
+    } catch (error) {
+        console.error('Error assigning color role:', error);
+        const ErrorEmbed = structuredClone(Bot.Embed);
+        ErrorEmbed.Color = 15548997;
+        ErrorEmbed.Title = '❌ Error';
+        ErrorEmbed.Description = 'Could not assign color role. Please try again.';
+        
+        if (isInteraction) {
+            if (msg.deferred || msg.replied) {
+                return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+            }
+            return msg.reply({ embeds: [CreateEmbed(ErrorEmbed)], ephemeral: true });
+        }
+        return msg.channel.send({ embeds: [CreateEmbed(ErrorEmbed)] });
     }
 }
 
@@ -142,63 +262,50 @@ export default {
     name: 'colors',
     data: new SlashCommandBuilder()
         .setName('colors')
-        .setDescription('Manage color roles with interactive buttons')
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('list')
-                .setDescription('List all available color roles with interactive buttons'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('assign')
-                .setDescription('Assign yourself a color role')
-                .addRoleOption(option =>
-                    option.setName('role')
-                        .setDescription('The color role to assign')
-                        .setRequired(true))),
+        .setDescription('View and manage your color roles with an interactive menu'),
     aliases: ['!9k Color Roles', '!9k Colors', '!9k List Color', '!9k Color'],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
-
-        // INTERACTIVE IMPROVEMENT: Handle button interactions
+        
+        // Handle button interactions
         if (msg.isButton && msg.isButton()) {
             const customId = msg.customId;
+            
+            // Color assignment button
             if (customId.startsWith('color_assign_')) {
                 const roleId = customId.split('_')[2];
-                await msg.deferReply();
-                return GiveColorRole(msg, Bot, null, roleId);
+                await msg.deferUpdate();
+                return assignColorRole(msg, Bot, roleId);
+            }
+            
+            // Pagination button
+            if (customId.startsWith('color_page_')) {
+                const page = parseInt(customId.split('_')[2]);
+                
+                // Validate page number
+                const allColorRoles = await getAllColorRoles(msg.guild);
+                const availableRows = MAX_ROWS - NAV_ROW;
+                const colorsPerPage = availableRows * BUTTONS_PER_ROW;
+                const totalPages = Math.ceil(allColorRoles.length / colorsPerPage);
+                
+                // If page is out of bounds, just acknowledge the interaction
+                if (page < 0 || page >= totalPages) {
+                    await msg.deferUpdate();
+                    return;
+                }
+                
+                await msg.deferUpdate();
+                return showColorMenu(msg, Bot, page);
             }
         }
-
+        
+        // Handle slash command
         if (isInteraction) {
             await msg.deferReply();
-            
-            try {
-                const sub = msg.options.getSubcommand();
-                if (sub === 'list') {
-                    return ListColorRoles(msg, Bot);
-                }
-                if (sub === 'assign') {
-                    const role = msg.options.getRole('role');
-                    return GiveColorRole(msg, Bot, role);
-                }
-            } catch (error) {
-                // No subcommand provided
-                const Embed = structuredClone(Bot.Embed);
-                Embed.Title = "❌ Subcommand Required";
-                Embed.Description = 'Please use one of the following subcommands:\n\n• `/colors list` - View all color roles\n• `/colors assign` - Assign a color role';
-                Embed.Thumbnail = false;
-                Embed.Image = false;
-                return msg.editReply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
-            }
-            return;
+            return showColorMenu(msg, Bot, 0);
         }
-
-        // BACKWARD COMPATIBILITY: Text command handling
-        if (SearchString(msg.content, ['!9k Color Roles', '!9k Colors', '!9k List Color'])) {
-            return ListColorRoles(msg, Bot);
-        }
-        if (SearchString(msg.content, ['!9k Color'])) {
-            return GiveColorRole(msg, Bot);
-        }
+        
+        // Handle text commands (backward compatibility)
+        return showColorMenu(msg, Bot, 0);
     }
 }

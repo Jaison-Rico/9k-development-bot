@@ -205,7 +205,7 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                                         console.error('Button interaction error:', error);
                                 }
                         }
-                } else if (customId.startsWith('color_assign_')) {
+                } else if (customId.startsWith('color_assign_') || customId.startsWith('color_page_')) {
                         const command = Bot.Commands.get('colors');
                         if (command) {
                                 try {
