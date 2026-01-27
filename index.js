@@ -281,6 +281,16 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
 });
 
 
+// Auto-enroll servers when bot joins
+Bot.Client.on('guildCreate', async guild => {
+        const { AddServer } = await import('./utils/functions.js');
+        console.log(`Bot joined new server: ${guild.name} (${guild.id})`);
+        
+        // Auto-register server without invite link
+        AddServer(guild.id, '', Bot);
+        console.log(`Auto-enrolled server: ${guild.name} to voting system`);
+});
+
 Bot.Client.on('guildMemberAdd', async member => {
         if (member.guild.id == '440275828509507597') {
         }

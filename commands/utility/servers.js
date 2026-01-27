@@ -34,7 +34,10 @@ export default {
             TopServers.forEach(server => {
                 const Guild = Bot.Client.guilds.cache.get(server.serverid);
                 const ServerName = Guild ? Guild.name : `Unknown Server (${server.serverid})`;
-                const InviteLink = server.link && server.link.startsWith('http') ? `[Join Server](${server.link})` : 'No Link';
+                
+                // Check if server has a valid invite link
+                const hasLink = server.link && server.link.trim() !== '' && server.link.startsWith('http');
+                const InviteLink = hasLink ? `[Join Server](${server.link})` : 'No invite set';
                 
                 Embed.Description += `**${i}. ${ServerName}** - 🏆 ${server.points} Points\n${InviteLink}\n\n`;
                 i++;
