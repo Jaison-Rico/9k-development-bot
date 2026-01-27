@@ -12,6 +12,30 @@ export function SetCoolDown(msg, command, time) {
     setTimeout(() => cooldowns.delete(key), time);
 }
 
+export function SendNetworkEmbed(msg, Bot, options) {
+    const Embed = structuredClone(Bot.Embed);
+    
+    if (options.Title) Embed.Title = options.Title;
+    if (options.Description) Embed.Description = options.Description;
+    if (options.Thumbnail !== undefined) Embed.Thumbnail = options.Thumbnail;
+    if (options.Image !== undefined) Embed.Image = options.Image;
+
+    const FinalEmbed = CreateEmbed(Embed);
+
+    if (options.Fields && Array.isArray(options.Fields)) {
+        options.Fields.forEach(field => {
+            FinalEmbed.addFields({ name: field.name, value: field.value });
+        });
+    }
+
+    const isInteraction = msg.commandName !== undefined;
+    if (isInteraction) {
+        msg.reply({ embeds: [FinalEmbed] });
+    } else {
+        msg.channel.send({ embeds: [FinalEmbed] });
+    }
+}
+
 export function AlertCoolDown(msg, key, Bot) {
     if (alertcooldowns.has(key)) {
         return;
