@@ -383,13 +383,84 @@ export function UpdatePromoUserVote(userid, oldServerId, newServerId, Bot) {
 export function ResetMonthlyStats(Bot) {
     const connection = ConnectDB(Bot);
     connection.connect();
-    connection.query('TRUNCATE TABLE BotServers', (err) => {
+    
+    // First, announce the winner before resetting
+    if (Bot.Servers && Bot.Servers.length > 0) {
+        // Find server with most points
+        const winner = Bot.Servers.reduce((prev, current) => {
+            return (current.points > prev.points) ? current : prev;
+        });
+        
+        if (winner && winner.points > 0) {
+            // Get server name
+            const Guild = Bot.Client.guilds.cache.get(winner.serverid);
+            const ServerName = Guild ? Guild.name : `Server ${winner.serverid}`;
+            
+            // Create embed for winner announcement
+            const embed = {
+                title: "🏆 Monthly Server Leaderboard Winner!",
+                description: `Congratulations to **${ServerName}** for winning this month's server competition!`,
+                color: 0xFFD700, // Gold color
+                fields: [
+                    {
+                        name: "Total Votes",
+                        value: `${winner.points} points`,
+                        inline: true
+                    },
+                    {
+                        name: "Server ID",
+                        value: winner.serverid,
+                        inline: true
+                    }
+                ],
+                timestamp: new Date().toISOString(),
+                footer: {
+                    text: "9k Bot Service - Monthly Reset"
+                }
+            };
+            
+            // Add invite link if available
+            if (winner.link && winner.link.trim() !== '' && winner.link.startsWith('http')) {
+                embed.fields.push({
+                    name: "Join the Winner",
+                    value: `[Click here to join](${winner.link})`,
+                    inline: false
+                });
+            }
+            
+            // Send to webhook
+            try {
+                Bot.WebHooks.Team.send({
+                    username: '9k Bot Service',
+                    embeds: [embed]
+                });
+                console.log(`Monthly winner announced: ${ServerName} with ${winner.points} points`);
+            } catch (error) {
+                console.error("Error announcing winner:", error);
+            }
+        }
+    }
+    
+    // Reset points to 0 for all servers (keep servers registered)
+    connection.query('UPDATE BotServers SET points = 0', (err) => {
         if(err) console.error("Reset Error BotServers", err);
-        else if (Bot.Servers) Bot.Servers = [];
+        else {
+            console.log("Monthly reset: All server points reset to 0");
+            // Update cache
+            if (Bot.Servers) {
+                Bot.Servers.forEach(server => {
+                    server.points = 0;
+                });
+            }
+        }
     });
+    
+    // Clear vote history (users can vote again)
     connection.query('TRUNCATE TABLE PromoUsers', (err) => {
         if (err) console.error("Reset Error PromoUsers", err);
+        else console.log("Monthly reset: Vote history cleared");
     });
+    
     connection.end();
 }
 
