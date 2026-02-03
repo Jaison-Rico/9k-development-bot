@@ -46,6 +46,14 @@ export default {
         .addStringOption(option => option.setName('message_id').setDescription('Message ID of the giveaway').setRequired(true))),
 
   async execute(interaction) {
+    // Verificar si el usuario tiene permisos de administrador
+    if (!interaction.member.permissions.has('Administrator')) {
+      return await interaction.reply({ 
+        content: 'Solo los administradores pueden usar este comando.', 
+        ephemeral: true 
+      });
+    }
+
     const subcommand = interaction.options.getSubcommand();
 
     switch (subcommand) {
