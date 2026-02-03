@@ -49,7 +49,7 @@ export default {
     // Verificar si el usuario tiene permisos de administrador
     if (!interaction.member.permissions.has('Administrator')) {
       return await interaction.reply({ 
-        content: 'Solo los administradores pueden usar este comando.', 
+        content: 'Only administrators can use this command', 
         ephemeral: true 
       });
     }
