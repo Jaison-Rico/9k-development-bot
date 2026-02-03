@@ -304,6 +304,44 @@ Bot.Client.on('guildMemberAdd', async member => {
         } catch (error) { console.log(error) }
 });
 
+// Giveaway reaction listener
+Bot.Client.on('messageReactionAdd', async (reaction, user) => {
+        if (user.bot) return;
+        
+        try {
+                const { default: Giveaway } = await import('./database/models/Giveaway.js');
+                const giveaway = await Giveaway.findOne({ messageId: reaction.message.id });
+                
+                if (giveaway && !giveaway.ended) {
+                        if (!giveaway.participants.includes(user.id)) {
+                                giveaway.participants.push(user.id);
+                                await giveaway.save();
+                        }
+                }
+        } catch (error) {
+                console.error('Error handling reaction add:', error);
+        }
+});
+
+Bot.Client.on('messageReactionRemove', async (reaction, user) => {
+        if (user.bot) return;
+        
+        try {
+                const { default: Giveaway } = await import('./database/models/Giveaway.js');
+                const giveaway = await Giveaway.findOne({ messageId: reaction.message.id });
+                
+                if (giveaway && !giveaway.ended) {
+                        const index = giveaway.participants.indexOf(user.id);
+                        if (index > -1) {
+                                giveaway.participants.splice(index, 1);
+                                await giveaway.save();
+                        }
+                }
+        } catch (error) {
+                console.error('Error handling reaction remove:', error);
+        }
+});
+
 // Log in to Discord with your client's token
 Bot.Client.login(Bot.Token);
 
