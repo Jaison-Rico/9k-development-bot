@@ -43,16 +43,24 @@ export default {
       subcommand
         .setName('reroll')
         .setDescription('Reroll a giveaway winner')
-        .addStringOption(option => option.setName('message_id').setDescription('Message ID of the giveaway').setRequired(true))),
+        .addStringOption(option => option.setName('message_id').setDescription('Message ID of the giveaway').setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('list')
+        .setDescription('List active giveaways')
+        .addStringOption(option => option.setName('scope').setDescription('Scope of giveaways to list').addChoices(
+          { name: 'All Servers', value: 'all_servers' },
+          { name: 'Current Server Only', value: 'current_server' }
+        ).setRequired(true))),
 
   async execute(interaction) {
     // Verificar si el usuario tiene permisos de administrador
-    if (!interaction.member.permissions.has('Administrator')) {
-      return await interaction.reply({ 
-        content: 'Only administrators can use this command', 
-        ephemeral: true 
-      });
-    }
+    // if (!interaction.member.permissions.has('Administrator')) {
+    //   return await interaction.reply({ 
+    //     content: 'Only administrators can use this command', 
+    //     ephemeral: true 
+    //   });
+    // }
 
     const subcommand = interaction.options.getSubcommand();
 
@@ -68,6 +76,9 @@ export default {
         break;
       case 'reroll':
         await rerollGiveaway(interaction);
+        break;
+      case 'list':
+        await listGiveaways(interaction);
         break;
       default:
         await interaction.reply({ content: 'Unknown subcommand.', ephemeral: true });
@@ -121,7 +132,7 @@ async function startGiveaway(interaction) {
   const allowMultiple = interaction.options.getBoolean('allow_multiple_wins') ?? false;
   const reactionInput = interaction.options.getString('reaction') ?? '🎉';
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ ephemeral: false });
 
   try {
     const endTime = parseEndDate(endDateInput);
@@ -195,7 +206,7 @@ async function startGiveaway(interaction) {
     await interaction.editReply(`✅ Giveaway **${title}** started! Ends <t:${Math.floor(endTime / 1000)}:R>`);
   } catch (error) {
     console.error('Error starting giveaway:', error);
-    await interaction.editReply('❌ Error starting giveaway.');
+    await interaction.editReply('Error starting giveaway.');
   }
 }
 
@@ -205,17 +216,17 @@ async function endGiveaway(interaction) {
   const giveaway = await Giveaway.findOne({ messageId });
 
   if (!giveaway || giveaway.ended) {
-    return await interaction.reply('❌ Giveaway not found or already ended.');
+    return await interaction.reply('Giveaway not found or already ended.');
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ ephemeral: false });
 
   try {
     await endGiveawayById(messageId, interaction.guild, interaction);
-    await interaction.editReply('✅ Giveaway has been ended.');
+    await interaction.editReply('Giveaway has been ended.');
   } catch (error) {
     console.error('Error ending giveaway:', error);
-    await interaction.editReply('❌ Error ending giveaway.');
+    await interaction.editReply('Error ending giveaway.');
   }
 }
 
@@ -225,10 +236,10 @@ async function cancelGiveaway(interaction) {
   const giveaway = await Giveaway.findOne({ messageId });
 
   if (!giveaway) {
-    return await interaction.reply('❌ Giveaway not found.');
+    return await interaction.reply('Giveaway not found.');
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ ephemeral: false });
 
   try {
     const channel = await interaction.guild.channels.fetch(giveaway.channelId);
@@ -236,10 +247,10 @@ async function cancelGiveaway(interaction) {
     await message.delete();
     await giveaway.delete();
 
-    await interaction.editReply('✅ Giveaway has been canceled.');
+    await interaction.editReply('Giveaway has been canceled.');
   } catch (error) {
     console.error('Error canceling giveaway:', error);
-    await interaction.editReply('❌ Error canceling giveaway.');
+    await interaction.editReply('Error canceling giveaway.');
   }
 }
 
@@ -249,10 +260,10 @@ async function rerollGiveaway(interaction) {
   const giveaway = await Giveaway.findOne({ messageId });
 
   if (!giveaway || !giveaway.ended) {
-    return await interaction.reply('❌ Giveaway not found or not ended yet.');
+    return await interaction.reply('Giveaway not found or not ended yet.');
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ ephemeral: false });
 
   try {
     const metadata = JSON.parse(giveaway.metadata || '{}');
@@ -265,7 +276,7 @@ async function rerollGiveaway(interaction) {
     }
 
     if (availableParticipants.length === 0) {
-      return await interaction.editReply('❌ No available participants for reroll.');
+      return await interaction.editReply('No available participants for reroll.');
     }
 
     const winners = [];
@@ -293,10 +304,143 @@ async function rerollGiveaway(interaction) {
       allowedMentions: { users: winners }
     });
 
-    await interaction.editReply('✅ Reroll completed! New winner(s) announced.');
+    await interaction.editReply('Reroll completed! New winner(s) announced.');
   } catch (error) {
     console.error('Error rerolling giveaway:', error);
-    await interaction.editReply('❌ Error rerolling giveaway.');
+    await interaction.editReply('Error rerolling giveaway.');
+  }
+}
+
+// List active giveaways across all servers
+async function listGiveaways(interaction) {
+  const scope = interaction.options.getString('scope');
+  await interaction.deferReply({ ephemeral: false });
+
+  try {
+    const client = interaction.client;
+    
+    // Get active giveaways based on scope
+    const filter = { ended: false };
+    if (scope === 'current_server') {
+      filter.guildId = interaction.guild.id;
+    }
+    const allActiveGiveaways = await Giveaway.find(filter);
+
+    if (allActiveGiveaways.length === 0) {
+      const message = scope === 'current_server' 
+        ? 'No active giveaways found in this server.' 
+        : 'No active giveaways found in any server.';
+      return await interaction.editReply(message);
+    }
+
+    // Group giveaways by server
+    const giveawaysByServer = {};
+    const now = Date.now();
+    
+    for (const giveaway of allActiveGiveaways) {
+      const guild = client.guilds.cache.get(giveaway.guildId);
+      if (!guild) continue;
+
+      const metadata = JSON.parse(giveaway.metadata || '{}');
+      const endTime = metadata.endTime || Date.now();
+      
+      // Skip giveaways that have already expired
+      if (endTime <= now) continue;
+
+      if (!giveawaysByServer[giveaway.guildId]) {
+        giveawaysByServer[giveaway.guildId] = {
+          guildName: guild.name,
+          giveaways: []
+        };
+      }
+      
+      giveawaysByServer[giveaway.guildId].giveaways.push({
+        title: metadata.title || 'Giveaway',
+        description: metadata.description || 'No description',
+        channelId: giveaway.channelId,
+        messageId: giveaway.messageId,
+        endTime: endTime,
+        winners: giveaway.winners,
+        participants: giveaway.participants.length
+      });
+    }
+
+    // Check if there are any truly active giveaways after filtering
+    if (Object.keys(giveawaysByServer).length === 0) {
+      return await interaction.editReply('No active giveaways found in any server.');
+    }
+
+    // Build embed list
+    const embeds = [];
+    const title = scope === 'current_server' ? 'Active Giveaways in This Server' : 'Active Giveaways by Server';
+    let currentEmbed = new EmbedBuilder()
+      .setTitle(title)
+      .setColor('#FF1493')
+      .setTimestamp();
+
+    let fieldCount = 0;
+    let totalActiveCount = 0;
+    const maxFieldsPerEmbed = 25;
+
+    for (const [guildId, data] of Object.entries(giveawaysByServer)) {
+      const { guildName, giveaways } = data;
+      
+      for (const giveaway of giveaways) {
+        if (fieldCount >= maxFieldsPerEmbed) {
+          embeds.push(currentEmbed);
+          const continuedTitle = scope === 'current_server' ? 'Active Giveaways (continued)' : 'Active Giveaways (continued)';
+          currentEmbed = new EmbedBuilder()
+            .setTitle(continuedTitle)
+            .setColor('#FF1493')
+            .setTimestamp();
+          fieldCount = 0;
+        }
+
+        const fieldValue = [
+          `**Prize:** ${giveaway.description}`,
+          `**Winners:** ${giveaway.winners}`,
+          `**Participants:** ${giveaway.participants}`,
+          `**Ends:** <t:${Math.floor(giveaway.endTime / 1000)}:R>`,
+          `**Channel:** <#${giveaway.channelId}>`,
+          `**Message ID:** \`${giveaway.messageId}\``
+        ].join('\n');
+
+        currentEmbed.addFields({
+          name: `${guildName} - ${giveaway.title}`,
+          value: fieldValue,
+          inline: false
+        });
+
+        fieldCount++;
+        totalActiveCount++;
+      }
+    }
+
+    // Add the last embed if it has fields
+    if (fieldCount > 0) {
+      embeds.push(currentEmbed);
+    }
+
+    // Add summary footer to first embed
+    if (embeds.length > 0) {
+      embeds[0].setFooter({ 
+        text: `Total: ${totalActiveCount} active giveaway(s) in ${Object.keys(giveawaysByServer).length} server(s)` 
+      });
+    }
+
+    // Send embeds (Discord allows max 10 embeds per message)
+    for (let i = 0; i < embeds.length; i += 10) {
+      const batch = embeds.slice(i, i + 10);
+      if (i === 0) {
+        await interaction.editReply({ embeds: batch });
+      } else {
+        await interaction.followUp({ embeds: batch, ephemeral: false });
+      }
+    }
+
+  } catch (error) {
+    console.error('Error listing giveaways:', error);
+    await interaction.editReply('Error listing giveaways.');
   }
 }
 
@@ -313,7 +457,7 @@ async function endGiveawayById(messageId, guild) {
 
     const participants = giveaway.participants;
     if (participants.length === 0) {
-      await channel.send('❌ No participants entered the giveaway.');
+      await channel.send('No participants entered the giveaway.');
       giveaway.ended = true;
       await giveaway.save();
       return;
@@ -338,7 +482,7 @@ async function endGiveawayById(messageId, guild) {
     const winnerMentions = winners.map(id => `<@${id}>`).join(', ');
 
     const winnerEmbed = new EmbedBuilder()
-      .setTitle('🎉 GIVEAWAY ENDED')
+      .setTitle('GIVEAWAY ENDED')
       .setDescription(`Congratulations to the winner${winners.length > 1 ? 's' : ''}!`)
       .addFields(
         { name: 'Giveaway', value: `**${metadata.title || 'N/A'}**`, inline: false },
@@ -350,7 +494,7 @@ async function endGiveawayById(messageId, guild) {
       .setTimestamp();
 
     await channel.send({ 
-      content: `🎉 Congratulations ${winnerMentions} 🎉`,
+      content: `Congratulations ${winnerMentions} `,
       embeds: [winnerEmbed],
       allowedMentions: { users: winners }
     });
