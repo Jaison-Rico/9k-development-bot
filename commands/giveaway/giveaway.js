@@ -54,13 +54,13 @@ export default {
         ).setRequired(true))),
 
   async execute(interaction) {
-    // Verificar si el usuario tiene permisos de administrador
-    // if (!interaction.member.permissions.has('Administrator')) {
-    //   return await interaction.reply({ 
-    //     content: 'Only administrators can use this command', 
-    //     ephemeral: true 
-    //   });
-    // }
+    //Verify if the user has administrator permissions
+    if (!interaction.member.permissions.has('Administrator')) {
+      return await interaction.reply({ 
+        content: 'Only administrators can use this command', 
+        ephemeral: true 
+      });
+    }
 
     const subcommand = interaction.options.getSubcommand();
 
