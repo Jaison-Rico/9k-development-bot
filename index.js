@@ -1,5 +1,5 @@
 /* Discord Requires */
-import { Client, Events, GatewayIntentBits, EmbedBuilder, WebhookClient, Collection } from 'discord.js';
+import { Client, Events, GatewayIntentBits, EmbedBuilder, WebhookClient, Collection, GatewayDispatchEvents } from 'discord.js';
 import fs from 'fs';
 import path from 'path';
 import  config  from './config.js';
@@ -10,6 +10,7 @@ import * as ytSearch from 'yt-search';
 import * as ytdl from 'discord-ytdl-core';
 import * as voice from '@discordjs/voice';
 import * as chartjs from 'chartjs-node-canvas';
+import { Riffy } from 'riffy';
 
 /*
  * UX IMPROVEMENTS IMPLEMENTED:
@@ -89,6 +90,16 @@ Bot.SongSys = {};
 Bot.SongSys.Servers = [];
 Bot.SongSys.AllowedServers = config.music.allowedServers;
 
+// Initialize Lavalink Manager with Riffy
+Bot.Client.riffy = new Riffy(Bot.Client, config.nodes, {
+        send: (payload) => {
+                const guild = Bot.Client.guilds.cache.get(payload.d.guild_id);
+                if (guild) guild.shard.send(payload);
+        },
+        defaultSearchPlatform: 'ytmsearch',
+        restVersion: 'v4'
+});
+
 // Load Commands
 Bot.Commands = new Collection();
 const commandFolders = fs.readdirSync('./commands');
@@ -108,9 +119,74 @@ ReturnDB('BotServers', Bot).then(function (value) { Bot.Servers = value });
 // Message logging/counting disabled (handled by another bot)
 Bot.ServerMessages = [];
 
+// Store AFK timeouts per guild
+const afkTimeouts = new Map();
+
+// Lavalink/Riffy Events
+Bot.Client.riffy.on('nodeConnect', (node) => {
+        console.log(`Lavalink node "${node.name}" connected!`);
+});
+
+Bot.Client.riffy.on('nodeError', (node, error) => {
+        console.log(`Lavalink node "${node.name}" encountered an error:`, error.message);
+});
+
+Bot.Client.riffy.on('trackStart', async (player, track) => {
+        // Clear AFK timeout when a new track starts
+        if (afkTimeouts.has(player.guildId)) {
+                clearTimeout(afkTimeouts.get(player.guildId));
+                afkTimeouts.delete(player.guildId);
+        }
+        const channel = Bot.Client.channels.cache.get(player.textChannel);
+        if (channel) {
+                channel.send(`Now playing: **${track.info.title}** by **${track.info.author}**`);
+        }
+});
+
+Bot.Client.riffy.on('trackEnd', async (player, track) => {
+        console.log(`Track ended: ${track.info.title}`);
+});
+
+Bot.Client.riffy.on('trackError', async (player, track, error) => {
+        console.log(`Track error: ${track.info.title} - ${error}`);
+        const channel = Bot.Client.channels.cache.get(player.textChannel);
+        if (channel) {
+                channel.send(`Error playing: **${track.info.title}**`);
+        }
+});
+
+Bot.Client.riffy.on('queueEnd', async (player) => {
+        console.log('Queue ended');
+        const channel = Bot.Client.channels.cache.get(player.textChannel);
+        if (channel) {
+                channel.send('Queue has ended. Disconnecting in 5 minutes if no new songs are added...');
+        }
+        // Set 5-minute AFK timeout
+        const timeout = setTimeout(() => {
+                const currentPlayer = Bot.Client.riffy.players.get(player.guildId);
+                if (currentPlayer && !currentPlayer.playing) {
+                        if (channel) {
+                                channel.send('Disconnected due to inactivity.');
+                        }
+                        currentPlayer.destroy();
+                }
+                afkTimeouts.delete(player.guildId);
+        }, 5 * 60 * 1000); // 5 minutes
+        afkTimeouts.set(player.guildId, timeout);
+});
+
+// Handle voice state & voice server updates for Riffy
+Bot.Client.on('raw', (d) => {
+        if (![GatewayDispatchEvents.VoiceStateUpdate, GatewayDispatchEvents.VoiceServerUpdate].includes(d.t)) return;
+        Bot.Client.riffy.updateVoiceState(d);
+});
+
 Bot.Client.once(Events.ClientReady, readyClient => {
         console.log(`Ready! Logged in as ${readyClient.user.tag}`);
-        Bot.Client.user.setPresence({ activity: { name: 'BotActivity', type: 'WATCHING' }, status: 'online' })
+        Bot.Client.user.setPresence({ activity: { name: 'BotActivity', type: 'WATCHING' }, status: 'online' });
+        // Initialize Riffy with bot's user ID
+        Bot.Client.riffy.init(readyClient.user.id);
+        console.log('Riffy music system initialized!');
         CheckMonthlyReset(Bot);
         setInterval(function () { SaveBotUsers(Bot); CheckMonthlyReset(Bot); }, 5000000)
 });
