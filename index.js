@@ -308,6 +308,15 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                                         console.error('Button interaction error:', error);
                                 }
                         }
+                } else if (customId.startsWith('giveaway_entered_page_')) {
+                        const command = Bot.Commands.get('giveaway');
+                        if (command) {
+                                try {
+                                        await command.execute(interaction, User, Bot);
+                                } catch (error) {
+                                        console.error('Button interaction error:', error);
+                                }
+                        }
                 }
                 return;
         }

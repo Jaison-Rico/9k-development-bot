@@ -51,18 +51,66 @@ export default {
         .addStringOption(option => option.setName('scope').setDescription('Scope of giveaways to list').addChoices(
           { name: 'All Servers', value: 'all_servers' },
           { name: 'Current Server Only', value: 'current_server' }
-        ).setRequired(true))),
+        ).setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('entered')
+        .setDescription('Show giveaways you or another user has entered')
+        .addUserOption(option => option.setName('user').setDescription('User to check (Admin only, leave empty for yourself)').setRequired(false)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('resetuser')
+        .setDescription('Remove a user from all giveaway entries (Admin only)')
+        .addUserOption(option => option.setName('user').setDescription('User to remove from giveaways').setRequired(true))),
 
   async execute(interaction) {
-    //Verify if the user has administrator permissions
+    const subcommand = interaction.options?.getSubcommand() || null;
+
+    // Handle button interactions for pagination
+    if (interaction.isButton?.()) {
+      const customId = interaction.customId;
+      if (customId.startsWith('giveaway_entered_page_')) {
+        // Format: giveaway_entered_page_{page}_{userId}
+        const parts = customId.replace('giveaway_entered_page_', '').split('_');
+        const page = parseInt(parts[0]);
+        const targetUserId = parts[1];
+        // Fetch the target user
+        let targetUser = interaction.user;
+        if (targetUserId && targetUserId !== interaction.user.id) {
+          try {
+            targetUser = await interaction.client.users.fetch(targetUserId);
+          } catch {
+            targetUser = interaction.user;
+          }
+        }
+        await showEnteredGiveaways(interaction, page, targetUser);
+        return;
+      }
+    }
+
+    // Allow 'entered' subcommand for all users
+    if (subcommand === 'entered') {
+      const targetUser = interaction.options.getUser('user');
+      // If user option is provided, require admin permissions
+      if (targetUser && targetUser.id !== interaction.user.id) {
+        if (!interaction.member.permissions.has('Administrator')) {
+          return await interaction.reply({ 
+            content: 'Only administrators can view other users\' giveaway entries.', 
+            ephemeral: true 
+          });
+        }
+      }
+      await showEnteredGiveaways(interaction, 0, targetUser || interaction.user);
+      return;
+    }
+
+    // Verify if the user has administrator permissions for other subcommands
     if (!interaction.member.permissions.has('Administrator')) {
       return await interaction.reply({ 
         content: 'Only administrators can use this command', 
         ephemeral: true 
       });
     }
-
-    const subcommand = interaction.options.getSubcommand();
 
     switch (subcommand) {
       case 'start':
@@ -79,6 +127,9 @@ export default {
         break;
       case 'list':
         await listGiveaways(interaction);
+        break;
+      case 'resetuser':
+        await resetUserEntries(interaction);
         break;
       default:
         await interaction.reply({ content: 'Unknown subcommand.', ephemeral: true });
@@ -308,6 +359,195 @@ async function rerollGiveaway(interaction) {
   } catch (error) {
     console.error('Error rerolling giveaway:', error);
     await interaction.editReply('Error rerolling giveaway.');
+  }
+}
+
+// Show giveaways the user has entered with pagination
+const GIVEAWAYS_PER_PAGE = 4;
+
+async function showEnteredGiveaways(interaction, page = 0, targetUser = null) {
+  const viewingUser = targetUser || interaction.user;
+  const userId = viewingUser.id;
+  const isViewingSelf = viewingUser.id === interaction.user.id;
+  const isButton = interaction.isButton?.();
+
+  try {
+    if (isButton) {
+      await interaction.deferUpdate();
+    } else {
+      await interaction.deferReply({ ephemeral: false });
+    }
+
+    const client = interaction.client;
+
+    // Get all giveaways where the user is a participant (both active and ended)
+    const allGiveaways = await Giveaway.find({});
+    
+    // Filter giveaways where user has entered
+    const enteredGiveaways = [];
+    
+    for (const giveaway of allGiveaways) {
+      if (giveaway.participants.includes(userId)) {
+        // Try to get guild info
+        let guildName = 'Unknown Server';
+        try {
+          const guild = await client.guilds.fetch(giveaway.guildId);
+          if (guild) guildName = guild.name;
+        } catch {
+          // Guild not accessible
+        }
+
+        const metadata = JSON.parse(giveaway.metadata || '{}');
+        const endTime = metadata.endTime || (giveaway.createdAt?.getTime() + giveaway.duration) || 0;
+
+        enteredGiveaways.push({
+          title: metadata.title || 'Giveaway',
+          description: metadata.description || giveaway.prize || 'No description',
+          guildName,
+          channelId: giveaway.channelId,
+          messageId: giveaway.messageId,
+          endTime: endTime,
+          winners: giveaway.winners,
+          participants: giveaway.participants.length,
+          ended: giveaway.ended,
+          type: metadata.type || 'other'
+        });
+      }
+    }
+
+    if (enteredGiveaways.length === 0) {
+      const embed = new EmbedBuilder()
+        .setTitle(isViewingSelf ? ' My Giveaway Entries' : ` ${viewingUser.username}'s Giveaway Entries`)
+        .setDescription(isViewingSelf 
+          ? 'You haven\'t entered any giveaways yet!\n\nLook for giveaways in server channels and react to enter.'
+          : `**${viewingUser.username}** hasn't entered any giveaways yet.`)
+        .setColor('#FF1493')
+        .setTimestamp();
+
+      return await interaction.editReply({ embeds: [embed], components: [] });
+    }
+
+    // Sort: active giveaways first (by end time), then ended ones
+    enteredGiveaways.sort((a, b) => {
+      if (a.ended !== b.ended) return a.ended ? 1 : -1;
+      return a.endTime - b.endTime;
+    });
+
+    // Pagination
+    const totalPages = Math.ceil(enteredGiveaways.length / GIVEAWAYS_PER_PAGE);
+    const currentPage = Math.max(0, Math.min(page, totalPages - 1));
+    const startIndex = currentPage * GIVEAWAYS_PER_PAGE;
+    const endIndex = Math.min(startIndex + GIVEAWAYS_PER_PAGE, enteredGiveaways.length);
+    const pageGiveaways = enteredGiveaways.slice(startIndex, endIndex);
+
+    // Build embed
+    const embed = new EmbedBuilder()
+      .setTitle(isViewingSelf ? ' My Giveaway Entries' : ` ${viewingUser.username}'s Giveaway Entries`)
+      .setColor('#FF1493')
+      .setTimestamp();
+
+    if (totalPages > 1) {
+      embed.setFooter({ text: `Page ${currentPage + 1}/${totalPages} • Total: ${enteredGiveaways.length} giveaway(s)` });
+    } else {
+      embed.setFooter({ text: `Total: ${enteredGiveaways.length} giveaway(s)` });
+    }
+
+    // Add giveaway fields
+    for (const giveaway of pageGiveaways) {
+      const statusEmoji = giveaway.ended ? '🔴' : '🟢';
+      const statusText = giveaway.ended ? 'Ended' : 'Active';
+      const timeText = giveaway.ended 
+        ? `Ended <t:${Math.floor(giveaway.endTime / 1000)}:R>`
+        : `Ends <t:${Math.floor(giveaway.endTime / 1000)}:R>`;
+
+      const fieldValue = [
+        `**Prize:** ${giveaway.description}`,
+        `**Server:** ${giveaway.guildName}`,
+        `**Status:** ${statusEmoji} ${statusText}`,
+        `**${giveaway.ended ? 'Ended' : 'Ends'}:** <t:${Math.floor(giveaway.endTime / 1000)}:R>`,
+        `**Participants:** ${giveaway.participants}`,
+        `**Winners:** ${giveaway.winners}`
+      ].join('\n');
+
+      embed.addFields({
+        name: `${statusEmoji} ${giveaway.title}`,
+        value: fieldValue,
+        inline: false
+      });
+    }
+
+    // Build pagination buttons
+    const components = [];
+    if (totalPages > 1) {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`giveaway_entered_page_${currentPage - 1}_${userId}`)
+          .setLabel('◀ Previous')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(currentPage === 0),
+        new ButtonBuilder()
+          .setCustomId(`giveaway_entered_page_${currentPage + 1}_${userId}`)
+          .setLabel('Next ▶')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(currentPage === totalPages - 1)
+      );
+      components.push(row);
+    }
+
+    await interaction.editReply({ embeds: [embed], components });
+
+  } catch (error) {
+    console.error('Error showing entered giveaways:', error);
+    const errorMessage = 'Error retrieving your giveaway entries.';
+    if (isButton) {
+      await interaction.editReply({ content: errorMessage, embeds: [], components: [] });
+    } else {
+      await interaction.editReply(errorMessage);
+    }
+  }
+}
+
+// Reset user entries - remove user from all giveaways (Admin only)
+async function resetUserEntries(interaction) {
+  const targetUser = interaction.options.getUser('user');
+  
+  await interaction.deferReply({ ephemeral: false });
+
+  try {
+    // Get all giveaways
+    const allGiveaways = await Giveaway.find({});
+    
+    let removedCount = 0;
+
+    for (const giveaway of allGiveaways) {
+      const index = giveaway.participants.indexOf(targetUser.id);
+      if (index !== -1) {
+        giveaway.participants.splice(index, 1);
+        await giveaway.save();
+        removedCount++;
+      }
+    }
+
+    if (removedCount === 0) {
+      return await interaction.editReply(`**${targetUser.tag}** is not participating in any giveaways.`);
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('User Entries Reset')
+      .setDescription(`Successfully removed **${targetUser.tag}** from **${removedCount}** giveaway(s).`)
+      .setColor('#00FF00')
+      .addFields(
+        { name: 'User', value: `${targetUser}`, inline: true },
+        { name: 'Giveaways Removed From', value: `${removedCount}`, inline: true },
+        { name: 'Reset By', value: `${interaction.user}`, inline: true }
+      )
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+
+  } catch (error) {
+    console.error('Error resetting user entries:', error);
+    await interaction.editReply('Error resetting user giveaway entries.');
   }
 }
 
