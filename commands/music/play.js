@@ -1,137 +1,155 @@
-// MOVABLE: 9kFun bot - Music system (already limited to specific servers)
-// This command will be moved to a separate 9kFun bot in the future
-import { CreateEmbed } from '../../utils/functions.js';
-import { SlashCommandBuilder } from 'discord.js';
+// Music command using Riffy/Lavalink
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 
 export default {
     name: 'play',
-    // MOVABLE: 9kFun bot - This music system will move to separate bot
     data: new SlashCommandBuilder()
         .setName('play')
-        .setDescription('Play music in voice channel (Limited servers) (🎮 Fun command - may move to 9kFun bot)')
+        .setDescription('Play music from YouTube, Spotify, etc.')
         .addStringOption(option =>
-            option.setName('query')
-                .setDescription('Song or video to search for')
+            option.setName('song')
+                .setDescription('Song name or URL')
                 .setRequired(true)),
-    aliases: ['!9k playdasdawdfafsfgsghrdzgdxgxcvxb'], // Original alias seems like a placeholder or specific trigger
-    execute(msg, User, Bot) {
-        return; // Original code returns immediately
+    aliases: [],
+    async execute(interaction, User, Bot) {
+        // Handle slash command interactions only
+        if (!interaction.isChatInputCommand) return;
 
-        let Blocked = true;
-        Bot.SongSys.AllowedServers.forEach(function (S) {
-            if (S == msg.guild.id) {
-                Blocked = false;
-            }
-        });
-        if (Blocked) {
-            const Embed = structuredClone(Bot.Embed);
-            Embed.Title = "Error: 401";
-            Embed.Description = `Currently music playlist are only supported in 9000inc's official server. Join to check it out!`;
-            const embed = CreateEmbed(Embed);
-            embed.addFields(
-                { name: '9ks Server', value: Bot.ServerInvite });
-            msg.channel.send({ embeds: [embed] });
-            return;
-        }
-        let Server = false;
-        const VC = msg.member.voice.channel;
-        if (VC) { }
-        else {
-            const Embed = structuredClone(Bot.Embed);
-            Embed.Title = "Join a voice channel.";
-            Embed.Description = ``;
-            msg.channel.send({ embeds: [CreateEmbed(Embed)] });
-            return;
-        }
-        Bot.SongSys.Servers.forEach(function (S) {
-            if (S.id == msg.guild.id) { Server = S }
-        });
+        const { member, guild, client } = interaction;
+        const query = interaction.options.getString('song');
 
-        if (Server) { }
-        else {
-            Server = {};
-            Server.id = msg.guild.id;
-            Server.VC = {};
-            Server.VC.id = VC.id;
-            Server.VC.Connection = false;
-            Server.VC.Stream = false;
-            Server.VC.Player = false;
-            Server.Playlist = [];
-            Server.Volume = 1;
-            Server.Bass = 1;
-            Server.Treble = 1;
-            Server.Speed = 1;
-            Server.Loop = false;
-            Server.Paused = false;
+        // Check if user is in a voice channel
+        if (!member.voice.channel) {
+            return interaction.reply({ content: 'You must be in a voice channel to use this command.', ephemeral: true });
         }
-        let searchtext = msg.content.replace('!9k Play', '');
-        searchtext = msg.content.replace('!9k play', '');
-        Bot.YTS(searchtext).then(SearchRes => {
-            const Videos = SearchRes.videos;
-            searchtext = '';
-            Videos.forEach(function (Video, ind) {
-                searchtext += `**#${ind} ${Video.title}** - *(${Video.duration.timestamp})*
-`;
 
+        // Check if bot has permissions
+        const permissions = member.voice.channel.permissionsFor(client.user);
+        if (!permissions.has('Connect') || !permissions.has('Speak')) {
+            return interaction.reply({ content: 'I do not have permission to connect or speak in your voice channel.', ephemeral: true });
+        }
+
+        // Defer reply immediately
+        await interaction.deferReply().catch(() => {});
+
+        try {
+            // Create or get player
+            const player = client.riffy.createConnection({
+                guildId: guild.id,
+                voiceChannel: member.voice.channel.id,
+                textChannel: interaction.channel.id,
+                deaf: true,
             });
-            const Embed = structuredClone(Bot.Embed);
-            Embed.Title = "Video Search";
-            Embed.Description = `**Enter a number from the list to add it to the song que!**
 
-` + searchtext;
-            msg.channel.send({ embeds: [CreateEmbed(Embed)] }).then(Sent => {
-                const msg_filter = response => { return response.author.id === msg.author.id };
-                Sent.channel.awaitMessages({ filter: msg_filter, max: 1 }).then((collected) => {
-                    let VChoice = Math.floor(collected.first().content);
-                    if (VChoice == 1 || VChoice == 2 || VChoice == 3 || VChoice == 4 || VChoice == 5 || VChoice == 6 || VChoice == 7 || VChoice == 8 || VChoice == 9 || VChoice == 10) { }
-                    else { VChoice = 1 }
+            // Resolve the query
+            const resolve = await client.riffy.resolve({ query: query, requester: interaction.user });
+            const { loadType, tracks, playlistInfo } = resolve;
 
-                    if (Server.VC.Connection) { }
-                    else {
-                        Server.VC.Connection = Bot.DVC.joinVoiceChannel({
-                            channelId: VC.id,
-                            guildId: msg.guild.id,
-                            adapterCreator: msg.guild.voiceAdapterCreator,
-                        });
-                    }
-                    Bot.SongSys.Servers.forEach(function (S) {
-                        if (S.id == msg.guild.id) { Server = S }
-                    });
-                    Server.Playlist.push(Videos[VChoice].url);
-                    if (Server.VC.Stream == false) {
-                        Server.VC.Player = Bot.DVC.createAudioPlayer();
+            console.log('Load type:', loadType);
+            console.log('Tracks found:', tracks?.length);
 
+            // Handle different load types
+            if (loadType === 'playlist') {
+                for (const track of tracks) {
+                    track.info.requester = interaction.user;
+                    player.queue.add(track);
+                }
 
+                if (!player.playing && !player.paused) {
+                    player.play();
+                }
 
-                        Server.VC.Stream = Bot.YTD(Videos[VChoice].url, {
-                            filter: "audioonly",
-                            opusEncoded: true,
-                            encoderArgs: ['-af', 'bass=g=10,dynaudnorm=f=200']
-                        });//, { filter: 'audioonly', opusEncoded: true, encoderArgs: ['-af', 'bass=g=10,dynaudnorm=f=200'] }).pipe(fs.createWriteStream("musicplayer.mp3"));
-                        console.log(Server.VC.Stream);
-                        Server.VC.Resource = Bot.DVC.createAudioResource(Server.VC.Stream, {
-                            filter: "audioonly",
-                            fmt: "mp3",
-                            highWaterMark: 1 << 30,
-                            liveBuffer: 20000,
-                            dlChunkSize: 4096,
-                            bitrate: 128,
-                            quality: "lowestaudio",
-                            inlineVolume: 0.3,
-                        });
-                        Server.VC.Connection.subscribe(Server.VC.Player);
-                        Server.VC.Player.play(Server.VC.Resource);
-                        Server.VC.Player.on('error', error => {
-                            console.log('Error:' + error);
-                            Server.VC.Player.stop();
-                            Server.VC.Connection.destroy();
-                            Server.VC.Stream.destroy();
-                        });
-                    }
+                return interaction.editReply(`Added playlist: **${playlistInfo.name}** (${tracks.length} songs)`).catch(() => {});
+            } else if (loadType === 'search' || loadType === 'track') {
+                const track = tracks.shift();
+                track.info.requester = interaction.user;
+                player.queue.add(track);
 
-                })
+                const wasPlaying = player.playing || player.paused;
+                if (!player.playing && !player.paused) {
+                    player.play();
+                }
 
-            })
-        })
+                // Get platform info
+                const platform = getPlatform(track.info.uri, track.info.sourceName);
+                const queuePosition = player.queue.length;
+                const duration = formatTime(track.info.length);
+
+                const embed = new EmbedBuilder()
+                    .setColor('#0099ff')
+                    .setAuthor({ name: 'Added Track', iconURL: platform.icon })
+                    .addFields(
+                        { name: 'Track', value: `[${track.info.title}](${track.info.uri}) by ${track.info.author}` },
+                        { name: 'Track Length', value: duration, inline: true },
+                        { name: 'Position in queue', value: wasPlaying ? String(queuePosition) : 'Now Playing', inline: true }
+                    )
+                    .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
+
+                if (track.info.thumbnail) {
+                    embed.setThumbnail(track.info.thumbnail);
+                }
+
+                return interaction.editReply({ embeds: [embed] }).catch(() => {});
+            } else {
+                return interaction.editReply('No results found.').catch(() => {});
+            }
+        } catch (error) {
+            console.error('Error en play command:', error);
+            return interaction.editReply(`An error occurred: ${error.message}`).catch(() => {});
+        }
+    }
+}
+
+function formatTime(ms) {
+    const seconds = Math.floor((ms / 1000) % 60);
+    const minutes = Math.floor((ms / (1000 * 60)) % 60);
+    const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
+
+    const hoursStr = hours > 0 ? `${hours}:` : '';
+    const minutesStr = minutes < 10 && hours > 0 ? `0${minutes}` : minutes;
+    const secondsStr = seconds < 10 ? `0${seconds}` : seconds;
+
+    return `${hoursStr}${minutesStr}:${secondsStr}`;
+}
+
+function getPlatform(uri, sourceName) {
+    const uriLower = uri?.toLowerCase() || '';
+    const source = sourceName?.toLowerCase() || '';
+
+    if (uriLower.includes('spotify.com') || source.includes('spotify')) {
+        return { 
+            name: 'Spotify', 
+            icon: 'https://i.imgur.com/1b57Ych.png'
+        };
+    }
+    if (uriLower.includes('music.youtube.com') || source.includes('youtube music') || source === 'ytmusic') {
+        return { 
+            name: 'YouTube Music', 
+            icon: 'https://i.imgur.com/hf3T7u7.png'
+        };
+    }
+    if (uriLower.includes('youtube.com') || uriLower.includes('youtu.be') || source.includes('youtube')) {
+        return { 
+            name: 'YouTube', 
+            icon: 'https://i.imgur.com/xzVHhFY.png'
+        };
+    }
+    if (uriLower.includes('soundcloud.com') || source.includes('soundcloud')) {
+        return { 
+            name: 'SoundCloud', 
+            icon: 'https://i.imgur.com/ezQdCky.png'
+        };
+    }
+    if (uriLower.includes('deezer.com') || source.includes('deezer')) {
+        return { 
+            name: 'Deezer', 
+            icon: 'https://e7.pngegg.com/pngimages/277/213/png-clipart-deezer-round-logo-tech-companies-thumbnail.png'
+        };
+    }
+    if (uriLower.includes('apple.com/music') || source.includes('apple')) {
+        return { 
+            name: 'Apple Music', 
+            icon: 'https://www.apple.com/newsroom/images/product/apple-music/apple_music-update_hero_08242021.jpg.news_app_ed.jpg'
+        };
     }
 }
