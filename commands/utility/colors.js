@@ -45,7 +45,8 @@ function createColorPreview(userColorRoles) {
 
 // Display color roles with pagination
 async function showColorMenu(msg, Bot, page = 0) {
-    const isInteraction = msg.commandName !== undefined;
+    const isButtonInteraction = typeof msg.isButton === 'function' && msg.isButton();
+    const isInteraction = msg.commandName !== undefined || isButtonInteraction;
     const member = msg.member;
     
     try {
@@ -139,6 +140,12 @@ async function showColorMenu(msg, Bot, page = 0) {
         }
         
         // Send or update message
+        if (isButtonInteraction) {
+            if (msg.deferred || msg.replied) {
+                return msg.editReply({ embeds: [CreateEmbed(Embed)], components: rows });
+            }
+            return msg.update({ embeds: [CreateEmbed(Embed)], components: rows });
+        }
         if (isInteraction) {
             if (msg.deferred || msg.replied) {
                 return msg.editReply({ embeds: [CreateEmbed(Embed)], components: rows });
@@ -154,6 +161,12 @@ async function showColorMenu(msg, Bot, page = 0) {
         ErrorEmbed.Title = '❌ Error';
         ErrorEmbed.Description = 'Could not load color roles. Please try again.';
         
+        if (isButtonInteraction) {
+            if (msg.deferred || msg.replied) {
+                return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+            }
+            return msg.update({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+        }
         if (isInteraction) {
             if (msg.deferred || msg.replied) {
                 return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
@@ -167,7 +180,8 @@ async function showColorMenu(msg, Bot, page = 0) {
 
 // Assign color role to user
 async function assignColorRole(msg, Bot, roleId) {
-    const isInteraction = msg.commandName !== undefined || msg.isButton?.();
+    const isButtonInteraction = typeof msg.isButton === 'function' && msg.isButton();
+    const isInteraction = msg.commandName !== undefined || isButtonInteraction;
     const member = msg.member;
     
     try {
@@ -183,6 +197,9 @@ async function assignColorRole(msg, Bot, roleId) {
                 if (msg.deferred || msg.replied) {
                     return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
                 }
+                if (isButtonInteraction) {
+                    return msg.update({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+                }
                 return msg.reply({ embeds: [CreateEmbed(ErrorEmbed)], ephemeral: true });
             }
             return msg.channel.send({ embeds: [CreateEmbed(ErrorEmbed)] });
@@ -197,6 +214,9 @@ async function assignColorRole(msg, Bot, roleId) {
             if (isInteraction) {
                 if (msg.deferred || msg.replied) {
                     return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+                }
+                if (isButtonInteraction) {
+                    return msg.update({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
                 }
                 return msg.reply({ embeds: [CreateEmbed(ErrorEmbed)], ephemeral: true });
             }
@@ -237,6 +257,9 @@ async function assignColorRole(msg, Bot, roleId) {
             if (msg.deferred || msg.replied) {
                 return msg.editReply({ embeds: [CreateEmbed(Embed)], components: [] });
             }
+            if (isButtonInteraction) {
+                return msg.update({ embeds: [CreateEmbed(Embed)], components: [] });
+            }
             return msg.reply({ embeds: [CreateEmbed(Embed)] });
         }
         return msg.channel.send({ embeds: [CreateEmbed(Embed)] });
@@ -251,6 +274,9 @@ async function assignColorRole(msg, Bot, roleId) {
         if (isInteraction) {
             if (msg.deferred || msg.replied) {
                 return msg.editReply({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
+            }
+            if (isButtonInteraction) {
+                return msg.update({ embeds: [CreateEmbed(ErrorEmbed)], components: [] });
             }
             return msg.reply({ embeds: [CreateEmbed(ErrorEmbed)], ephemeral: true });
         }
