@@ -35,6 +35,19 @@ export default {
         serverInvite: 'YOUR_SERVER_INVITE_LINK'
     },
 
+    // Lavalink / Riffy Nodes (required for music commands)
+    // Start a Lavalink server and point these values at it.
+    // Default Lavalink port is usually 2333 and default password often "youshallnotpass".
+    nodes: [
+        {
+            name: 'Main',
+            host: '127.0.0.1',
+            port: 2333,
+            password: 'youshallnotpass',
+            secure: false
+        }
+    ],
+
     // Redeem Codes
     codes: [
         '!9k SuperGremlin', '!9k Lazyyy', '!9k CalOFduty9000', '!9k Bunny', '!9k HootHoot',
