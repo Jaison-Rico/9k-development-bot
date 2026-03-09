@@ -2,6 +2,102 @@ import { SlashCommandBuilder } from '@discordjs/builders';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import Giveaway from '../../database/models/Giveaway.js';
 
+// Maximum safe setTimeout delay (about 24.8 days)
+const MAX_TIMEOUT = 2147483647;
+
+// Store active giveaway timeouts for cleanup
+const activeGiveawayTimeouts = new Map();
+
+// Safe setTimeout that handles durations longer than MAX_TIMEOUT
+function safeSetTimeout(callback, delay, giveawayId) {
+  // Clear any existing timeout for this giveaway
+  if (giveawayId && activeGiveawayTimeouts.has(giveawayId)) {
+    clearTimeout(activeGiveawayTimeouts.get(giveawayId));
+  }
+
+  if (delay <= MAX_TIMEOUT) {
+    const timeoutId = setTimeout(callback, delay);
+    if (giveawayId) {
+      activeGiveawayTimeouts.set(giveawayId, timeoutId);
+    }
+    return timeoutId;
+  }
+
+  // For longer delays, set an intermediate timeout and recursively call again
+  const timeoutId = setTimeout(() => {
+    safeSetTimeout(callback, delay - MAX_TIMEOUT, giveawayId);
+  }, MAX_TIMEOUT);
+
+  if (giveawayId) {
+    activeGiveawayTimeouts.set(giveawayId, timeoutId);
+  }
+  return timeoutId;
+}
+
+// Restore active giveaways on bot startup
+async function restoreActiveGiveaways(client) {
+  // Run restoration in background to not block the event loop
+  setImmediate(async () => {
+    try {
+      const activeGiveaways = await Giveaway.find({ ended: false });
+      const now = Date.now();
+      let restored = 0;
+      let ended = 0;
+      const expiredGiveaways = [];
+
+      for (const giveaway of activeGiveaways) {
+        const metadata = JSON.parse(giveaway.metadata || '{}');
+        const endTime = metadata.endTime || (giveaway.createdAt?.getTime() + giveaway.duration);
+
+        if (!endTime) continue;
+
+        const remainingTime = endTime - now;
+
+        if (remainingTime <= 0) {
+          // Queue expired giveaways to process later
+          expiredGiveaways.push(giveaway);
+        } else {
+          // Schedule the giveaway to end
+          try {
+            const guild = await client.guilds.fetch(giveaway.guildId);
+            if (guild) {
+              safeSetTimeout(async () => {
+                await endGiveawayById(giveaway.messageId, guild);
+              }, remainingTime, giveaway.messageId);
+              restored++;
+            }
+          } catch (err) {
+            console.error(`Failed to restore giveaway ${giveaway.messageId}:`, err.message);
+          }
+        }
+      }
+
+      console.log(`Giveaways: Restored ${restored} active, ${expiredGiveaways.length} expired to process`);
+
+      // Process expired giveaways in background with delays to not block event loop
+      for (const giveaway of expiredGiveaways) {
+        try {
+          const guild = await client.guilds.fetch(giveaway.guildId);
+          if (guild) {
+            await endGiveawayById(giveaway.messageId, guild);
+            ended++;
+          }
+        } catch (err) {
+          console.error(`Failed to end expired giveaway ${giveaway.messageId}:`, err.message);
+        }
+        // Small delay between processing expired giveaways to not block
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      if (ended > 0) {
+        console.log(`Giveaways: Ended ${ended} expired giveaways`);
+      }
+    } catch (error) {
+      console.error('Error restoring giveaways:', error);
+    }
+  });
+}
+
 export default {
   name: 'giveaway',
   data: new SlashCommandBuilder()
@@ -96,7 +192,7 @@ export default {
         if (!interaction.member.permissions.has('Administrator')) {
           return await interaction.reply({ 
             content: 'Only administrators can view other users\' giveaway entries.', 
-            ephemeral: true 
+            flags: 64 
           });
         }
       }
@@ -108,7 +204,7 @@ export default {
     if (!interaction.member.permissions.has('Administrator')) {
       return await interaction.reply({ 
         content: 'Only administrators can use this command', 
-        ephemeral: true 
+        flags: 64 
       });
     }
 
@@ -132,10 +228,11 @@ export default {
         await resetUserEntries(interaction);
         break;
       default:
-        await interaction.reply({ content: 'Unknown subcommand.', ephemeral: true });
+        await interaction.reply({ content: 'Unknown subcommand.', flags: 64 });
     }
   },
   endGiveawayById,
+  restoreActiveGiveaways,
 };
 
 // Parse duration or date
@@ -183,7 +280,7 @@ async function startGiveaway(interaction) {
   const allowMultiple = interaction.options.getBoolean('allow_multiple_wins') ?? false;
   const reactionInput = interaction.options.getString('reaction') ?? '🎉';
 
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     const endTime = parseEndDate(endDateInput);
@@ -249,10 +346,10 @@ async function startGiveaway(interaction) {
 
     await giveaway.save();
 
-    // Set timeout to end giveaway
-    setTimeout(async () => {
+    // Set timeout to end giveaway (using safe setTimeout for long durations)
+    safeSetTimeout(async () => {
       await endGiveawayById(message.id, interaction.guild, interaction);
-    }, duration);
+    }, duration, message.id);
 
     await interaction.editReply(`✅ Giveaway **${title}** started! Ends <t:${Math.floor(endTime / 1000)}:R>`);
   } catch (error) {
@@ -270,7 +367,7 @@ async function endGiveaway(interaction) {
     return await interaction.reply('Giveaway not found or already ended.');
   }
 
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     await endGiveawayById(messageId, interaction.guild, interaction);
@@ -290,7 +387,7 @@ async function cancelGiveaway(interaction) {
     return await interaction.reply('Giveaway not found.');
   }
 
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     const channel = await interaction.guild.channels.fetch(giveaway.channelId);
@@ -314,7 +411,7 @@ async function rerollGiveaway(interaction) {
     return await interaction.reply('Giveaway not found or not ended yet.');
   }
 
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     const metadata = JSON.parse(giveaway.metadata || '{}');
@@ -375,7 +472,7 @@ async function showEnteredGiveaways(interaction, page = 0, targetUser = null) {
     if (isButton) {
       await interaction.deferUpdate();
     } else {
-      await interaction.deferReply({ ephemeral: false });
+      await interaction.deferReply();
     }
 
     const client = interaction.client;
@@ -511,7 +608,7 @@ async function showEnteredGiveaways(interaction, page = 0, targetUser = null) {
 async function resetUserEntries(interaction) {
   const targetUser = interaction.options.getUser('user');
   
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     // Get all giveaways
@@ -554,7 +651,7 @@ async function resetUserEntries(interaction) {
 // List active giveaways across all servers
 async function listGiveaways(interaction) {
   const scope = interaction.options.getString('scope');
-  await interaction.deferReply({ ephemeral: false });
+  await interaction.deferReply();
 
   try {
     const client = interaction.client;
@@ -674,7 +771,7 @@ async function listGiveaways(interaction) {
       if (i === 0) {
         await interaction.editReply({ embeds: batch });
       } else {
-        await interaction.followUp({ embeds: batch, ephemeral: false });
+        await interaction.followUp({ embeds: batch });
       }
     }
 

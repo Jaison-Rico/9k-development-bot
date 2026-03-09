@@ -11,6 +11,7 @@ import * as ytdl from 'discord-ytdl-core';
 import * as voice from '@discordjs/voice';
 import * as chartjs from 'chartjs-node-canvas';
 import { Riffy } from 'riffy';
+import giveawayCommand from './commands/giveaway/giveaway.js';
 
 /*
  * UX IMPROVEMENTS IMPLEMENTED:
@@ -189,6 +190,8 @@ Bot.Client.once(Events.ClientReady, readyClient => {
         console.log('Riffy music system initialized!');
         CheckMonthlyReset(Bot);
         setInterval(function () { SaveBotUsers(Bot); CheckMonthlyReset(Bot); }, 5000000)
+        // Restore active giveaways
+        giveawayCommand.restoreActiveGiveaways(Bot.Client);
 });
 
 Bot.Client.on('messageCreate', msg => {
@@ -357,10 +360,15 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                 await command.execute(interaction, User, Bot);
         } catch (error) {
                 console.error(error);
-                if (interaction.replied || interaction.deferred) {
-                        await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
-                } else {
-                        await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+                try {
+                        if (interaction.replied || interaction.deferred) {
+                                await interaction.followUp({ content: 'There was an error while executing this command!', flags: 64 });
+                        } else {
+                                await interaction.reply({ content: 'There was an error while executing this command!', flags: 64 });
+                        }
+                } catch (replyError) {
+                        // Interaction already expired or failed, just log it
+                        console.error('Could not send error response:', replyError.message);
                 }
         }
 });
