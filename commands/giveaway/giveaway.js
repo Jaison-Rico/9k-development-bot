@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from '@discordjs/builders';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import Giveaway from '../../database/models/Giveaway.js';
+import { CheckServerAdmin } from '../../utils/functions.js';
 
 export default {
   name: 'giveaway',
@@ -93,7 +94,8 @@ export default {
       const targetUser = interaction.options.getUser('user');
       // If user option is provided, require admin permissions
       if (targetUser && targetUser.id !== interaction.user.id) {
-        if (!interaction.member.permissions.has('Administrator')) {
+        const isAdminUser = await CheckServerAdmin(interaction);
+        if (!isAdminUser) {
           return await interaction.reply({ 
             content: 'Only administrators can view other users\' giveaway entries.', 
             ephemeral: true 
@@ -105,7 +107,8 @@ export default {
     }
 
     // Verify if the user has administrator permissions for other subcommands
-    if (!interaction.member.permissions.has('Administrator')) {
+    const isAdmin = await CheckServerAdmin(interaction);
+    if (!isAdmin) {
       return await interaction.reply({ 
         content: 'Only administrators can use this command', 
         ephemeral: true 
