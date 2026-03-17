@@ -1,4 +1,4 @@
-import { CreateEmbed } from '../../utils/functions.js';
+import { CreateEmbed, CheckServerAdmin } from '../../utils/functions.js';
 import { SlashCommandBuilder } from 'discord.js';
 
 export default {
@@ -41,8 +41,8 @@ export default {
             }
         }
 
-        const memberPerms = isInteraction ? msg.member?.permissions : msg.member?.permissions;
-        if (!memberPerms || !memberPerms.has('SendMessages')) {
+        const isAdmin = await CheckServerAdmin(msg, Bot);
+        if (!isAdmin) {
             const Embed = structuredClone(Bot.Embed);
             Embed.Title = "Permission Denied";
             Embed.Description = "You do not have permission to send messages.";

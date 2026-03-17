@@ -1,4 +1,4 @@
-import { CreateEmbed } from '../../utils/functions.js';
+import { CreateEmbed, CheckServerAdmin } from '../../utils/functions.js';
 import { SlashCommandBuilder } from 'discord.js';
 
 export default {
@@ -10,6 +10,19 @@ export default {
     aliases: ['!9k Emote'],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
+
+        const isAdmin = await CheckServerAdmin(msg, Bot);
+        if (!isAdmin) {
+            const Embed = structuredClone(Bot.Embed);
+            Embed.Title = "Permission Denied";
+            Embed.Description = "You need admin permissions to use the emote command.";
+            Embed.Thumbnail = false;
+            Embed.Image = false;
+            if (isInteraction) {
+                return msg.reply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
+            }
+            return msg.channel.send({ embeds: [CreateEmbed(Embed)] });
+        }
 
         const PromptEmbed = structuredClone(Bot.Embed);
         PromptEmbed.Title = 'React to this to get emote info!';

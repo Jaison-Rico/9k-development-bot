@@ -1,4 +1,4 @@
-import { AddServer } from '../../utils/functions.js';
+import { AddServer, CheckAdmin } from '../../utils/functions.js';
 import { SlashCommandBuilder } from 'discord.js';
 
 export default {
@@ -12,8 +12,12 @@ export default {
         // Get user ID
         const userId = isInteraction ? msg.user.id : msg.author.id;
         
-        // TODO: Add proper admin check here
-        // For now, just execute
+        const isAdmin = await CheckAdmin(msg);
+        if (!isAdmin) {
+            return isInteraction 
+                ? await msg.reply({ content: 'Only Super Admins (Team9000) can use this command.', ephemeral: true }) 
+                : msg.reply('Only Super Admins (Team9000) can use this command.');
+        }
         
         if (isInteraction) {
             await msg.deferReply();

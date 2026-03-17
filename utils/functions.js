@@ -273,10 +273,46 @@ export async function CheckAdmin(msg) {
     const isInteraction = msg.commandName !== undefined;
     const userId = isInteraction ? msg.user.id : msg.author.id;
     const CacheUser = await msg.guild.members.fetch(userId);
+    
+    // Admin Role 1: Super Administrador (Team9000)
+    // using the existing role ID from previous version
     if (CacheUser.roles.cache.has('1177742430716571678')) {
         found = userId;
     }
     return found;
+}
+
+export async function CheckServerAdmin(msg, Bot) {
+    const isInteraction = msg.commandName !== undefined;
+    const userId = isInteraction ? msg.user.id : msg.author.id;
+    const member = msg.member || await msg.guild.members.fetch(userId);
+    
+    // 1. Native Administrator permission
+    if (member.permissions.has('Administrator')) return true;
+    
+    // 2. Super Administrador (Team9000) always has access
+    if (member.roles.cache.has('1177742430716571678')) return true;
+    
+    // 3. Bot-specific Admin role (Admin Role 2)
+    // Tries to match !BotName-Admin (e.g., !9k-Admin, !9kAnalytics-Admin)
+    let botName = "9k";
+    if (Bot && Bot.Client && Bot.Client.user) {
+        botName = Bot.Client.user.username; // Note: Username might need to match the expected format exactly
+    }
+    
+    const exactRoleName = `!${botName}-Admin`;
+    
+    // Check if the user has a role starting with ! and ending in -Admin 
+    // Just in case the username doesn't exactly match the string user provided, 
+    // let's also explicitly check the ones the user provided.
+    const hasRole = member.roles.cache.some(role => 
+        role.name === exactRoleName || 
+        role.name === '!9k-Admin' || 
+        role.name === '!9kAnalytics-Admin' || 
+        role.name === '!9kMusic-Admin'
+    );
+    
+    return hasRole;
 }
 
 export const delay = ms => new Promise(resolve => setTimeout(resolve, ms));

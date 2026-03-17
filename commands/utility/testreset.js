@@ -1,4 +1,4 @@
-import { ResetMonthlyStats } from '../../utils/functions.js';
+import { ResetMonthlyStats, CheckAdmin } from '../../utils/functions.js';
 import { SlashCommandBuilder } from 'discord.js';
 
 export default {
@@ -12,6 +12,13 @@ export default {
         // Check if user is admin (you can add your own admin check here)
         const userId = isInteraction ? msg.user.id : msg.author.id;
         
+        const isAdmin = await CheckAdmin(msg);
+        if (!isAdmin) {
+            return isInteraction 
+                ? await msg.reply({ content: 'Only Super Admins (Team9000) can use this command.', ephemeral: true }) 
+                : msg.reply('Only Super Admins (Team9000) can use this command.');
+        }
+
         // For now, just execute (you should add admin check in production)
         if (isInteraction) {
             await msg.reply('Testing monthly reset... Check webhook for winner announcement!');
