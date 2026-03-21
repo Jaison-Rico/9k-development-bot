@@ -91,6 +91,12 @@ Bot.SongSys = {};
 Bot.SongSys.Servers = [];
 Bot.SongSys.AllowedServers = config.music.allowedServers;
 
+const messageCashCooldowns = new Map();
+
+function getMessageCashCooldownMs() {
+        return 14000 + Math.floor(Math.random() * 3001);
+}
+
 // Initialize Lavalink Manager with Riffy
 Bot.Client.riffy = new Riffy(Bot.Client, config.nodes, {
         send: (payload) => {
@@ -210,6 +216,14 @@ Bot.Client.on('messageCreate', msg => {
         User = GetUser(msg.author.id, Bot);
         //User.messages += 1;
         if (msg.author.bot) { return }
+
+        const messageCashKey = `MsgCash-${msg.author.id}`;
+        const now = Date.now();
+        const currentMessageCashCooldown = messageCashCooldowns.get(messageCashKey) || 0;
+        if (now >= currentMessageCashCooldown) {
+                User.cash += 1;
+                messageCashCooldowns.set(messageCashKey, now + getMessageCashCooldownMs());
+        }
 
         // Message logging/counting disabled (handled by another bot)
 
