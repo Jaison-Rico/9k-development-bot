@@ -72,6 +72,16 @@ function processRewards(tier, streak) {
     return { totalCash, rewardMessages };
 }
 
+function getLocalDayKeyMs(date) {
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getDaysBetweenLocalDates(fromDate, toDate) {
+    const fromKey = getLocalDayKeyMs(fromDate);
+    const toKey = getLocalDayKeyMs(toDate);
+    return Math.floor((toKey - fromKey) / (1000 * 60 * 60 * 24));
+}
+
 export default {
     name: 'daily',
     data: new SlashCommandBuilder()
@@ -116,7 +126,7 @@ export default {
                     description += `\n\n**Progress:** ${nextTierInfo.daysUntilNext} days until ${nextTierInfo.name} tier`;
                 }
                 
-                description += `\n\n*Come back in 24 hours to continue your streak!*`;
+                description += `\n\n*Come back tomorrow to continue your streak!*`;
                 
                 Embed.Description = description;
                 
@@ -130,18 +140,20 @@ export default {
                 return;
             }
             
-            // Calculate time difference in hours
-            const timeDiff = (now - lastClaim) / (1000 * 60 * 60); // Convert to hours
-            
-            // Less than 24 hours - show cooldown
-            if (timeDiff < 24) {
-                const hoursLeft = Math.floor(24 - timeDiff);
-                const minutesLeft = Math.floor((24 - timeDiff - hoursLeft) * 60);
+            const dayDiff = getDaysBetweenLocalDates(lastClaim, now);
+
+            // Same local day - show cooldown until next local midnight
+            if (dayDiff <= 0) {
+                const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+                const msLeft = Math.max(0, nextMidnight.getTime() - now.getTime());
+                const totalMinutesLeft = Math.ceil(msLeft / (1000 * 60));
+                const hoursLeft = Math.floor(totalMinutesLeft / 60);
+                const minutesLeft = totalMinutesLeft % 60;
                 const tier = getTierByStreak(currentStreak);
                 
                 Embed.Color = 15548997; // Red
                 Embed.Title = 'Daily Reward on Cooldown';
-                Embed.Description = `You've already claimed your daily reward!\n\n**Time Remaining:** ${hoursLeft}h ${minutesLeft}m\n**Current Streak:** ${currentStreak} day${currentStreak > 1 ? 's' : ''}\n**Current Tier:** ${tier.name}\n\n*Come back later to claim your next reward!*`;
+                Embed.Description = `You've already claimed your daily reward today!\n\n**Time Remaining:** ${hoursLeft}h ${minutesLeft}m\n**Current Streak:** ${currentStreak} day${currentStreak > 1 ? 's' : ''}\n**Current Tier:** ${tier.name}\n\n*Come back tomorrow to claim your next reward!*`;
                 
                 if (isInteraction) {
                     await msg.reply({ embeds: [CreateEmbed(Embed)], ephemeral: true });
@@ -151,8 +163,8 @@ export default {
                 return;
             }
             
-            // Between 24h and 48h - continue streak
-            if (timeDiff >= 24 && timeDiff < 48) {
+            // Claimed yesterday - continue streak
+            if (dayDiff === 1) {
                 const oldStreak = currentStreak;
                 currentStreak += 1;
                 const oldTier = getTierByStreak(oldStreak);
@@ -192,8 +204,8 @@ export default {
                 return;
             }
             
-            // More than 48h - reset streak
-            if (timeDiff >= 48) {
+            // Missed at least one day - reset streak
+            if (dayDiff >= 2) {
                 currentStreak = 1;
                 const tier = getTierByStreak(currentStreak);
                 const { totalCash, rewardMessages } = processRewards(tier, currentStreak);
