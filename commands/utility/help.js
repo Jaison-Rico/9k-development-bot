@@ -18,7 +18,7 @@ function buildCategoryEmbed(category, Bot) {
             Embed.Title = "📋 9k Bot Command Categories";
             Embed.Description = `Welcome to 9k Bot! Select a category below to explore commands:
 
-**📊 Economy** - Balance, shop, daily rewards, robux trading
+**📊 Economy** - Balance, shop, daily rewards
 **🏛️ Server** - Analytics, leaderboard, voting  
 **👥 User & Roles** - Profile, colors, channel roles
 **🎮 Fun & Games** - Gambling, games, entertainment
@@ -40,11 +40,7 @@ function buildCategoryEmbed(category, Bot) {
 
 **Shopping System**
 \`/shop\` or \`!9k Shop\` - View available items
-\`!9k Buy\` - Purchase shop items
-
-**Robux Trading**
-\`/robux rate\` or \`!9k Robux Rate\` - Check conversion rates
-\`/robux trade\` or \`!9k Buy Robux\` - Trade bot cash for Robux`;
+\`!9k Buy\` - Purchase shop items`;
             break;
 
         case 'server':
@@ -209,10 +205,6 @@ Tip: Use the buttons below to switch views.
 **!9k Shop** - *List the bot's shop item's*
 
 **!9k Buy** - *Buy's item from the shop*
-
-**!9k Robux Rate** - *Gives info about current robux trading rate's.*
-
-**!9k Buy Robux** - *Allows you to trade bot point's/cash for robux!*
 
 **!9k Emote** - *Create's a message you can react on to get emoji info.*
 
