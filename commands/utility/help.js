@@ -47,8 +47,8 @@ function buildCategoryEmbed(category, Bot, ctx) {
 \`/redeem\` or codes - Redeem special codes for cash
 
 **Shopping System**
-\`/shop\` - View available items
-\`!9k Buy\` - Purchase shop items`;
+\`/shop\` - View available items & purchase with buttons
+\`/inventory\` - Manage shop inventory (Admin)`;
             break;
 
         case 'server':
@@ -58,7 +58,10 @@ function buildCategoryEmbed(category, Bot, ctx) {
                 : ''}**Server Community**
 \`/servers\` or \`!9k Server List\` - View server leaderboard
 \`/vote\` or \`!9k Vote\` - Vote for servers
-\`/serverinvite\` or \`!9k Server Invite\` - Register your server`;
+\`/serverinvite\` or \`!9k Server Invite\` - Register your server
+
+**Events**
+\`/giveaway\` - Manage giveaways (Admin)`;
             break;
 
         case 'roles':
@@ -88,15 +91,29 @@ function buildCategoryEmbed(category, Bot, ctx) {
 \`/guess\` or \`!9k guess\` - Number guessing game
 \`/work\` or \`!9k Work\` - Random work events
 
+**🎵 Music**
+\`/play\` - Play a song or playlist
+\`/pause\`, \`/skip\`, \`/stop\` - Playback controls
+\`/queue\`, \`/nowplaying\`, \`/volume\` - Queue & volume
+
 *Note: These commands may move to a separate 9kFun bot in the future*`;
             break;
 
         case 'admin':
             Embed.Title = "⚙️ Admin Commands";
             Embed.Description = `**Moderation Tools**
+\`/clear\` - Bulk delete messages
+\`/ban\`, \`/unban\` - Ban/unban a user
+\`/kick\` - Kick a user
+\`/timeout\`, \`/untimeout\` - Timeout management
+
+**Admin & Management**
 \`/announce\` - Make server announcements
+\`/giveaway\` - Manage giveaways
+\`/inventory\` - Manage shop inventory
 \`/updateroles\` or \`!9k Update Member Roles\` - Bulk role updates
 \`/save\` or \`!9k ForceSave\` - Force save bot data
+\`/testreset\`, \`/enrollall\` - Super Admin tools
 
 **Requirements:** Admin permissions or specific roles needed`;
             break;
@@ -107,6 +124,7 @@ function buildCategoryEmbed(category, Bot, ctx) {
 \`/invite\` or \`!9k Invite\` - Get bot invite link
 \`/emote\` or \`!9k Emote\` - Get emoji information
 \`/9ktube\` or \`!9k 9kTube\` - YouTube extension info
+\`/remindme\` - Set a personal reminder
 
 **Support & Links**
 Bot invite and server links available via \`/invite\`
@@ -208,8 +226,6 @@ Tip: Use the buttons below to switch views.
 
 **!9k Channel Roles** - *List all channel / extra role's in the server!*
 
-**!9k Buy** - *Buy's item from the shop*
-
 **!9k Emote** - *Create's a message you can react on to get emoji info.*
 
 **!9k Work** - *Random Event / Work Job.*
@@ -219,9 +235,8 @@ Tip: Use the buttons below to switch views.
 **!9k Slots** - *A slot game you can play to win and lose money!*
 
 **!9k bj** - *Play some black jack and become the next high roller!*\n
-**!9k Transfer** - *Let's you send some of your cash to another user!*\n
 **!9k 9kTube** - *Info about our youtube extension!*\n
-**!9k Coin Flip** - *Flip a coin see the result!*\n
+**!9k coinflip** - *Flip a coin see the result!*\n
 **!9k Guess** - *Guess the number im thinking of!*\n
 **!9k Invite** - *Get a link to invite 9k to your server!*\n
 **!9k Server List** - *List the server's 9k is in.*\n
