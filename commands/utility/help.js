@@ -8,7 +8,15 @@ import {
 } from 'discord.js';
 
 // UX IMPROVEMENT: New categorized help system for better command discoverability
-function buildCategoryEmbed(category, Bot) {
+function is9kAnalyticsGuild(ctx) {
+    const guildName = ctx?.guild?.name;
+    if (typeof guildName !== 'string') return false;
+
+    const normalized = guildName.trim().toLowerCase();
+    return normalized === '@9k analytics' || normalized === '9k analytics';
+}
+
+function buildCategoryEmbed(category, Bot, ctx) {
     const Embed = structuredClone(Bot.Embed);
     Embed.Thumbnail = false;
     Embed.Image = false;
@@ -25,7 +33,7 @@ function buildCategoryEmbed(category, Bot) {
 **⚙️ Admin** - Moderation and management tools
 **ℹ️ Bot Info** - Invites, help, and information
 
-*Tip: All commands work with both slash (/) and prefix (!9k)*`;
+*Tip: Prefer slash commands (/) for best support*`;
             break;
 
         case 'economy':
@@ -35,21 +43,19 @@ function buildCategoryEmbed(category, Bot) {
 \`!9k balance\` - Quick balance check
 
 **Rewards**
-\`/daily\` or \`!9k Daily\` - Claim daily reward & streak (New Tiers!)
+\`/daily\` - Claim daily reward & streak (New Tiers!)
 \`/redeem\` or codes - Redeem special codes for cash
 
 **Shopping System**
-\`/shop\` or \`!9k Shop\` - View available items
+\`/shop\` - View available items
 \`!9k Buy\` - Purchase shop items`;
             break;
 
         case 'server':
             Embed.Title = "🏛️ Server Management";
-            Embed.Description = `**Analytics & Stats**
-\`/messages\` or \`!9k Messages\` - Server message analytics
-Add time filters: \`!9k Messages Week\`, \`!9k Messages Day\`
-
-**Server Community**
+            Embed.Description = `${is9kAnalyticsGuild(ctx)
+                ? `**Analytics & Stats**\n\`/messages\` - Server message analytics\n\n`
+                : ''}**Server Community**
 \`/servers\` or \`!9k Server List\` - View server leaderboard
 \`/vote\` or \`!9k Vote\` - Vote for servers
 \`/serverinvite\` or \`!9k Server Invite\` - Register your server`;
@@ -152,7 +158,7 @@ function getHelpModeFromPrefixMessage(msg) {
     return 'categories'; // Default to new categorized system
 }
 
-function buildSlashCommandsHelp(Bot) {
+function buildSlashCommandsHelp(Bot, ctx) {
     const lines = [];
 
     Bot.Commands.forEach((cmd) => {
@@ -164,6 +170,10 @@ function buildSlashCommandsHelp(Bot) {
         const desc = json?.description || '';
 
         if (!name) return;
+
+        if (name === 'messages' && !is9kAnalyticsGuild(ctx)) {
+            return;
+        }
 
         const subcommands = Array.isArray(json.options)
             ? json.options
@@ -182,17 +192,13 @@ function buildSlashCommandsHelp(Bot) {
     return lines.join('\n\n');
 }
 
-function buildLegacyHelpEmbed(mode, Bot) {
+function buildLegacyHelpEmbed(mode, Bot, ctx) {
     const Embed = structuredClone(Bot.Embed);
     Embed.Title = "Bot Commands";
 
     const prefixHelp = `**!9k Help** - *Helpful info on using our bot!*
 
 Tip: Use the buttons below to switch views.
-
-**!9k Daily** - *Claim daily rewards with tier system!*
-
-**!9k Messages (All, Year, Month, Week, Day, Hour) #Channel** - *List server message's within time ranges*
 
 **!9k List Colors** - *List all color role's in the server.*
 
@@ -201,8 +207,6 @@ Tip: Use the buttons below to switch views.
 **!9k Role @Role** - *Give's you that role!*
 
 **!9k Channel Roles** - *List all channel / extra role's in the server!*
-
-**!9k Shop** - *List the bot's shop item's*
 
 **!9k Buy** - *Buy's item from the shop*
 
@@ -225,7 +229,7 @@ Tip: Use the buttons below to switch views.
 **!9k Vote <id>** - *Vote for a server!*
 `;
 
-    const slashHelp = buildSlashCommandsHelp(Bot);
+    const slashHelp = buildSlashCommandsHelp(Bot, ctx);
 
     if (mode === 'prefix') {
         Embed.Description = `__Prefix Commands__\n\n${prefixHelp}`;
@@ -289,7 +293,7 @@ export default {
         // NEW: Use categorized help system by default
         if (mode === 'categories') {
             const payload = {
-                embeds: [CreateEmbed(buildCategoryEmbed('main', Bot))],
+                embeds: [CreateEmbed(buildCategoryEmbed('main', Bot, msg))],
                 components: buildCategoryComponents('main'),
             };
 
@@ -310,7 +314,7 @@ export default {
                 const category = i.customId.split(':')[1];
                 
                 const nextPayload = {
-                    embeds: [CreateEmbed(buildCategoryEmbed(category, Bot))],
+                    embeds: [CreateEmbed(buildCategoryEmbed(category, Bot, i))],
                     components: buildCategoryComponents(category),
                 };
 
@@ -330,7 +334,7 @@ export default {
 
         // LEGACY SUPPORT: Keep old help system for specific modes
         const payload = {
-            embeds: [CreateEmbed(buildLegacyHelpEmbed(mode, Bot))],
+            embeds: [CreateEmbed(buildLegacyHelpEmbed(mode, Bot, msg))],
             components: buildLegacyHelpComponents(mode),
         };
 
@@ -353,7 +357,7 @@ export default {
             else if (i.customId === 'help:both') mode = 'both';
 
             const nextPayload = {
-                embeds: [CreateEmbed(buildLegacyHelpEmbed(mode, Bot))],
+                embeds: [CreateEmbed(buildLegacyHelpEmbed(mode, Bot, msg))],
                 components: buildLegacyHelpComponents(mode),
             };
 
