@@ -3,7 +3,7 @@ import { Client, Events, GatewayIntentBits, EmbedBuilder, WebhookClient, Collect
 import fs from 'fs';
 import path from 'path';
 import  config  from './config.js';
-import { GetUser, AddUser, SearchString, SaveBotUsers, ReturnDB, AlertCoolDown, SetCoolDown, CheckCoolDown, CheckMonthlyReset } from './utils/functions.js';
+import { GetUser, AddUser, SearchString, SaveBotUsers, ReturnDB, AlertCoolDown, SetCoolDown, CheckCoolDown, CheckMonthlyReset, GetActiveAntiSpam, ShouldShowAntiSpam, GetRandomQuestion, CreateEmbed } from './utils/functions.js';
 import * as mysql2 from 'mysql2';
 import * as canvas from 'canvas';
 import * as ytSearch from 'yt-search';
@@ -234,6 +234,18 @@ Bot.Client.on('messageCreate', msg => {
                 return AlertCoolDown(msg, cooldownkey, Bot)
         }
 
+        // Anti-Spam Check
+        const activeAntiSpam = GetActiveAntiSpam();
+        if (activeAntiSpam.has(msg.author.id)) {
+                const challenge = activeAntiSpam.get(msg.author.id);
+                if (msg.content.toLowerCase().trim() === challenge.answer) {
+                        activeAntiSpam.delete(msg.author.id);
+                        return msg.reply('**Verified.** You can continue using commands.');
+                }
+                return; // Silently ignore other messages or remind them? The requirement says "si no eres un bot, escribe...". 
+                // We block commands below, so we just return here.
+        }
+
         if (SearchString(mtext, Bot.Codes) && cmdrunning == false) {
                 Bot.Commands.get('redeem').execute(msg, User, Bot);
                 cmdrunning = true;
@@ -257,6 +269,12 @@ Bot.Client.on('messageCreate', msg => {
         });
 
         if (bestMatch && !cmdrunning) {
+             // Roll for anti-spam before executing
+             if (ShouldShowAntiSpam()) {
+                 const challenge = GetRandomQuestion(Bot);
+                 activeAntiSpam.set(msg.author.id, challenge);
+                 return msg.reply(challenge.text);
+             }
              bestMatch.execute(msg, User, Bot);
              cmdrunning = true;
         }
@@ -368,6 +386,21 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                         Bot.Users.push(User);
                         AddUser(User.userid, Bot);
                         User = GetUser(interaction.user.id, Bot);
+                }
+
+                // Anti-Spam Check for Slash Commands
+                const activeAntiSpam = GetActiveAntiSpam();
+                if (activeAntiSpam.has(interaction.user.id)) {
+                    return interaction.reply({ 
+                        content: `You have an active anti-spam control. Please type the requested word in the channel before using more commands.`, 
+                        ephemeral: true 
+                    });
+                }
+
+                if (ShouldShowAntiSpam()) {
+                    const challenge = GetRandomQuestion(Bot);
+                    activeAntiSpam.set(interaction.user.id, challenge);
+                    return interaction.reply({ content: challenge.text });
                 }
 
                 // Execute the command
