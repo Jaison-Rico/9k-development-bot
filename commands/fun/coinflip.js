@@ -9,7 +9,7 @@ export default {
     data: new SlashCommandBuilder()
     .setName('coinflip')
     .setDescription('Flips a coin! (🎮 Fun command - may move to 9kFun bot)'),
-    aliases: ['!9k coinflip', '!9k heads or tails', '!9k heads ortails'],
+    aliases: [],
     execute(interaction, User, Bot) {
         let Res = Math.floor(Math.random() * 2);
         if (Res == 0) { Res = 'Heads' }

@@ -16,7 +16,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('slots')
         .setDescription('Play the slot machine and bet your cash (🎮 Fun command - may move to 9kFun bot)'),
-    aliases: ['!9k Slots', '!9k Play Slots'],
+    aliases: [],
     execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const userId = isInteraction ? msg.user.id : msg.author.id;

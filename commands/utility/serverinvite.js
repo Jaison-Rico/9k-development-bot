@@ -11,7 +11,7 @@ export default {
             option.setName('invite')
                 .setDescription('The discord invite link for your server')
                 .setRequired(true)),
-    aliases: ['!9k server invite', '!9k invite server', '!9k serverinvite'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         let inviteLink = '';

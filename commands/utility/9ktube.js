@@ -6,7 +6,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('9ktube')
         .setDescription('Get information about the 9kTube YouTube extension'),
-    aliases: ['!9k 9kTube', '!9k Youtube'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const { SendNetworkEmbed } = await import('../../utils/functions.js');
         SendNetworkEmbed(msg, Bot, {

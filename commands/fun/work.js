@@ -124,7 +124,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('work')
         .setDescription('Choose a job type and work to earn cash'),
-    aliases: ['!9k Work'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const userId = isInteraction ? msg.user.id : msg.author.id;

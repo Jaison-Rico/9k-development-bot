@@ -87,7 +87,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('daily')
         .setDescription('Claim your daily reward and maintain your streak!'),
-    aliases: ['!9k Daily'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const userId = isInteraction ? msg.user.id : msg.author.id;

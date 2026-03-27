@@ -169,7 +169,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('blackjack')
         .setDescription('Play blackjack and bet your cash (🎮 Fun command - may move to 9kFun bot)'),
-    aliases: ['!9k bj', '!9k black'],
+    aliases: [],
     execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const userId = isInteraction ? msg.user.id : msg.author.id;

@@ -218,7 +218,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('shop')
         .setDescription('View shop items and purchase with interactive buttons'),
-    aliases: ['!9k Buy', '!9k Purchase', '!9k Shop', '!9k List Shop', '!9k items'],
+    aliases: [],
     async execute(interaction, User, Bot) {
         // Handle button interactions
         if (interaction.isButton && interaction.isButton()) {

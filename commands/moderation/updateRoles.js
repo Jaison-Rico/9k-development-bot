@@ -7,7 +7,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('updateroles')
         .setDescription('Update member roles for all server members (Admin only - use with caution)'),
-    aliases: ['!9k Update Member Roles'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const channel = msg.channel;

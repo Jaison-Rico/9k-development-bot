@@ -286,7 +286,7 @@ export default {
                     { name: 'Profile (default)', value: 'profile' },
                     { name: 'Stats & Analytics', value: 'stats' }
                 )),
-    aliases: ['!9k User', '!9k bal', '!9k balance', '!9k wallet', '!9k profile', '!9k stats'],
+    aliases: [],
 
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
