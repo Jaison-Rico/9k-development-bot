@@ -209,7 +209,6 @@ Bot.Client.on('messageCreate', msg => {
                 User.exp = 0;
                 User.messages = 0;
                 User.cash = 0;
-                User.websiteuser = null;
                 Bot.Users.push(User);
                 AddUser(User.userid, Bot);
         }
@@ -300,7 +299,6 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                         User.exp = 0;
                         //User.messages = 0;
                         User.cash = 0;
-                        User.websiteuser = null;
                         Bot.Users.push(User);
                         AddUser(User.userid, Bot);
                         User = GetUser(interaction.user.id, Bot);
@@ -382,7 +380,6 @@ Bot.Client.on(Events.InteractionCreate, async interaction => {
                         User.exp = 0;
                         User.messages = 0;
                         User.cash = 0;
-                        User.websiteuser = null;
                         Bot.Users.push(User);
                         AddUser(User.userid, Bot);
                         User = GetUser(interaction.user.id, Bot);
