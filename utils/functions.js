@@ -86,7 +86,7 @@ export function GetUser(user, Bot) {
 export function AddUser(id, Bot) {
     const connection = ConnectDB(Bot);
     connection.connect();
-    connection.query("INSERT INTO `BotUsers` (`id`, `userid`, `messages`, `exp`, `cash`, `websiteuser`) VALUES (NULL, '" + id + "', '0', '0', '0', 'NULL');", function (error, results, fields) {
+    connection.query("INSERT INTO `BotUsers` (`id`, `userid`, `messages`, `exp`, `cash`) VALUES (NULL, '" + id + "', '0', '0', '0');", function (error, results, fields) {
         if (error) console.error('AddUser Error:', error);
     });
     connection.on('error', function (err) { console.error('Db Error:', err); });
