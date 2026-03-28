@@ -8,47 +8,54 @@ export default {
         .setDescription('Shows the current song queue'),
     aliases: [],
     async execute(interaction, User, Bot) {
-        // Handle slash command interactions only
-        if (!interaction.isChatInputCommand) return;
-
         const { guild, client } = interaction;
 
-        // Get the player
-        const player = client.riffy.players.get(guild.id);
+        const player = client.riffy?.players.get(guild.id);
 
         if (!player) {
-            return interaction.reply({ content: 'Nothing is currently playing.', ephemeral: true });
+            return interaction.reply({ content: 'Nothing is currently playing.', flags: 64 });
         }
 
         const current = player.current;
 
         if (!current) {
-            return interaction.reply({ content: 'The queue is empty.', ephemeral: true });
+            return interaction.reply({ content: 'The queue is empty.', flags: 64 });
         }
 
-        const queue = player.queue;
-        const tracks = queue.slice(0, 10);
+        const upcoming = [...player.queue].slice(0, 10);
 
         const embed = new EmbedBuilder()
             .setColor('#0099ff')
-            .setTitle('Song Queue')
-            .setDescription(`**Now playing:**\n[${current.info.title}](${current.info.uri}) - ${current.info.author}\n\n**Up next:**`)
+            .setTitle('🎵 Song Queue')
             .setTimestamp();
 
-        if (tracks.length === 0) {
-            embed.setDescription(`**Now playing:**\n[${current.info.title}](${current.info.uri}) - ${current.info.author}\n\n*No more songs in the queue*`);
+        if (upcoming.length === 0) {
+            embed.setDescription(`**Now playing:**\n[${getTrackTitle(current)}](${getTrackUri(current)}) - ${getTrackAuthor(current)}\n\n*No more songs in the queue*`);
         } else {
-            const queueList = tracks.map((track, index) => {
-                return `${index + 1}. [${track.info.title}](${track.info.uri}) - ${track.info.author}`;
+            const queueList = upcoming.map((track, index) => {
+                return `${index + 1}. [${getTrackTitle(track)}](${getTrackUri(track)}) - ${getTrackAuthor(track)}`;
             }).join('\n');
 
-            embed.addFields({ name: '\u200b', value: queueList });
+            embed.setDescription(`**Now playing:**\n[${getTrackTitle(current)}](${getTrackUri(current)}) - ${getTrackAuthor(current)}\n\n**Up next:**`)
+                .addFields({ name: '\u200b', value: queueList });
 
-            if (queue.length > 10) {
-                embed.setFooter({ text: `And ${queue.length - 10} more songs...` });
+            if (player.queue.length > 10) {
+                embed.setFooter({ text: `And ${player.queue.length - 10} more songs...` });
             }
         }
 
         return interaction.reply({ embeds: [embed] });
     }
+}
+
+function getTrackTitle(track) {
+    return track.info?.title || track.title || 'Unknown Title';
+}
+
+function getTrackAuthor(track) {
+    return track.info?.author || track.author || 'Unknown Artist';
+}
+
+function getTrackUri(track) {
+    return track.info?.uri || track.uri || 'https://youtube.com';
 }

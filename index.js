@@ -128,15 +128,9 @@ Bot.ServerMessages = [];
 
 // Store AFK timeouts per guild
 const afkTimeouts = new Map();
+const lastTrackStartByGuild = new Map();
 
 // Lavalink/Riffy Events
-Bot.Client.riffy.on('nodeConnect', (node) => {
-        console.log(`Lavalink node "${node.name}" connected!`);
-});
-
-Bot.Client.riffy.on('nodeError', (node, error) => {
-        console.log(`Lavalink node "${node.name}" encountered an error:`, error.message);
-});
 
 Bot.Client.riffy.on('trackStart', async (player, track) => {
         // Clear AFK timeout when a new track starts
@@ -144,18 +138,23 @@ Bot.Client.riffy.on('trackStart', async (player, track) => {
                 clearTimeout(afkTimeouts.get(player.guildId));
                 afkTimeouts.delete(player.guildId);
         }
+
+        // Some nodes can emit duplicate trackStart rapidly; suppress duplicates.
+        const startKey = `${track.info?.identifier || track.info?.title || 'unknown'}:${track.info?.length || 0}`;
+        const previousStart = lastTrackStartByGuild.get(player.guildId);
+        const now = Date.now();
+        if (previousStart && previousStart.key === startKey && (now - previousStart.timestamp) < 5000) {
+                return;
+        }
+        lastTrackStartByGuild.set(player.guildId, { key: startKey, timestamp: now });
+
         const channel = Bot.Client.channels.cache.get(player.textChannel);
         if (channel) {
                 channel.send(`Now playing: **${track.info.title}** by **${track.info.author}**`);
         }
 });
 
-Bot.Client.riffy.on('trackEnd', async (player, track) => {
-        console.log(`Track ended: ${track.info.title}`);
-});
-
-Bot.Client.riffy.on('trackError', async (player, track, error) => {
-        console.log(`Track error: ${track.info.title} - ${error}`);
+Bot.Client.riffy.on('trackError', async (player, track) => {
         const channel = Bot.Client.channels.cache.get(player.textChannel);
         if (channel) {
                 channel.send(`Error playing: **${track.info.title}**`);
@@ -163,7 +162,7 @@ Bot.Client.riffy.on('trackError', async (player, track, error) => {
 });
 
 Bot.Client.riffy.on('queueEnd', async (player) => {
-        console.log('Queue ended');
+        lastTrackStartByGuild.delete(player.guildId);
         const channel = Bot.Client.channels.cache.get(player.textChannel);
         if (channel) {
                 channel.send('Queue has ended. Disconnecting in 5 minutes if no new songs are added...');
@@ -183,6 +182,7 @@ Bot.Client.riffy.on('queueEnd', async (player) => {
 });
 
 // Handle voice state & voice server updates for Riffy
+// Forward only voice packets to avoid unexpected duplicate handling.
 Bot.Client.on('raw', (d) => {
         if (![GatewayDispatchEvents.VoiceStateUpdate, GatewayDispatchEvents.VoiceServerUpdate].includes(d.t)) return;
         Bot.Client.riffy.updateVoiceState(d);
@@ -193,7 +193,6 @@ Bot.Client.once(Events.ClientReady, readyClient => {
         Bot.Client.user.setPresence({ activity: { name: 'BotActivity', type: 'WATCHING' }, status: 'online' });
         // Initialize Riffy with bot's user ID
         Bot.Client.riffy.init(readyClient.user.id);
-        console.log('Riffy music system initialized!');
         CheckMonthlyReset(Bot);
         setInterval(function () { SaveBotUsers(Bot); CheckMonthlyReset(Bot); }, 5000000)
         // Restore active giveaways
@@ -420,6 +419,25 @@ Bot.Client.on('messageReactionAdd', async (reaction, user) => {
                 const giveaway = await Giveaway.findOne({ messageId: reaction.message.id });
                 
                 if (giveaway && !giveaway.ended) {
+                        const metadata = JSON.parse(giveaway.metadata || '{}');
+                        const requiredRoleId = metadata.requiredRoleId || null;
+                        const requiredReaction = metadata.reaction || '🎉';
+
+                        // Only accept the configured reaction emoji for this giveaway.
+                        const reactionName = reaction.emoji?.name || '';
+                        if (reactionName !== requiredReaction) {
+                                return;
+                        }
+
+                        if (requiredRoleId) {
+                                const member = await reaction.message.guild.members.fetch(user.id).catch(() => null);
+                                const hasRole = member?.roles?.cache?.has(requiredRoleId);
+                                if (!hasRole) {
+                                        await reaction.users.remove(user.id).catch(() => {});
+                                        return;
+                                }
+                        }
+
                         if (!giveaway.participants.includes(user.id)) {
                                 giveaway.participants.push(user.id);
                                 await giveaway.save();
@@ -438,6 +456,13 @@ Bot.Client.on('messageReactionRemove', async (reaction, user) => {
                 const giveaway = await Giveaway.findOne({ messageId: reaction.message.id });
                 
                 if (giveaway && !giveaway.ended) {
+                        const metadata = JSON.parse(giveaway.metadata || '{}');
+                        const requiredReaction = metadata.reaction || '🎉';
+                        const reactionName = reaction.emoji?.name || '';
+                        if (reactionName !== requiredReaction) {
+                                return;
+                        }
+
                         const index = giveaway.participants.indexOf(user.id);
                         if (index > -1) {
                                 giveaway.participants.splice(index, 1);

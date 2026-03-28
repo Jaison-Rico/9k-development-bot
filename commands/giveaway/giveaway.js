@@ -124,6 +124,7 @@ export default {
         ).setRequired(true))
         .addStringOption(option => option.setName('end_date').setDescription('End date (YYYY-MM-DD HH:MM format or duration like "1m", "1h", "1d")').setRequired(true))
         .addIntegerOption(option => option.setName('winners').setDescription('Number of winners').setRequired(true))
+        .addRoleOption(option => option.setName('required_role').setDescription('Only users with this role can enter (optional)').setRequired(false))
         .addBooleanOption(option => option.setName('allow_multiple_wins').setDescription('Allow same user to win multiple times?').setRequired(false))
         .addStringOption(option => option.setName('reaction').setDescription('Reaction emoji to enter (default: 🎉)').setRequired(false)))
     .addSubcommand(subcommand =>
@@ -280,6 +281,7 @@ async function startGiveaway(interaction) {
   const type = interaction.options.getString('type');
   const endDateInput = interaction.options.getString('end_date');
   const winners = interaction.options.getInteger('winners');
+  const requiredRole = interaction.options.getRole('required_role');
   const allowMultiple = interaction.options.getBoolean('allow_multiple_wins') ?? false;
   const reactionInput = interaction.options.getString('reaction') ?? '🎉';
 
@@ -313,6 +315,7 @@ async function startGiveaway(interaction) {
       .addFields(
         { name: 'Type', value: typeNames[type] || 'Other', inline: true },
         { name: 'Winners', value: `${winners}`, inline: true },
+        { name: 'Required Role', value: requiredRole ? `<@&${requiredRole.id}>` : 'None', inline: true },
         { name: 'Ends', value: `<t:${Math.floor(endTime / 1000)}:f>`, inline: false },
         { name: 'Hosted by', value: `${interaction.user}`, inline: true },
         { name: 'Multiple Wins', value: allowMultiple ? 'Yes' : 'No', inline: true }
@@ -341,6 +344,7 @@ async function startGiveaway(interaction) {
         type,
         endTime,
         allowMultiple,
+        requiredRoleId: requiredRole ? requiredRole.id : null,
         reaction: reactionInput,
         hostedBy: interaction.user.id,
         claimed: []
@@ -701,7 +705,8 @@ async function listGiveaways(interaction) {
         messageId: giveaway.messageId,
         endTime: endTime,
         winners: giveaway.winners,
-        participants: giveaway.participants.length
+        participants: giveaway.participants.length,
+        requiredRoleId: metadata.requiredRoleId || null
       });
     }
 
@@ -736,12 +741,15 @@ async function listGiveaways(interaction) {
           fieldCount = 0;
         }
 
+        const giveawayJumpUrl = `https://discord.com/channels/${guildId}/${giveaway.channelId}/${giveaway.messageId}`;
+
         const fieldValue = [
           `**Prize:** ${giveaway.description}`,
           `**Winners:** ${giveaway.winners}`,
           `**Participants:** ${giveaway.participants}`,
+          `**Required Role:** ${giveaway.requiredRoleId ? `<@&${giveaway.requiredRoleId}>` : 'None'}`,
           `**Ends:** <t:${Math.floor(giveaway.endTime / 1000)}:R>`,
-          `**Channel:** <#${giveaway.channelId}>`,
+          `**Channel:** ${giveawayJumpUrl}`,
           `**Message ID:** \`${giveaway.messageId}\``
         ].join('\n');
 
@@ -794,10 +802,29 @@ async function endGiveawayById(messageId, guild) {
     const channel = await guild.channels.fetch(giveaway.channelId);
     const metadata = JSON.parse(giveaway.metadata || '{}');
     const allowMultiple = metadata.allowMultiple || false;
+    const requiredRoleId = metadata.requiredRoleId || null;
 
-    const participants = giveaway.participants;
+    let participants = giveaway.participants;
+    if (requiredRoleId) {
+      const eligibleParticipants = [];
+      for (const userId of participants) {
+        try {
+          const member = await guild.members.fetch(userId);
+          if (member?.roles?.cache?.has(requiredRoleId)) {
+            eligibleParticipants.push(userId);
+          }
+        } catch {
+          // Ignore users that cannot be fetched
+        }
+      }
+      participants = eligibleParticipants;
+    }
+
     if (participants.length === 0) {
-      await channel.send('No participants entered the giveaway.');
+      const noParticipantMessage = requiredRoleId
+        ? 'No eligible participants with the required role entered the giveaway.'
+        : 'No participants entered the giveaway.';
+      await channel.send(noParticipantMessage);
       giveaway.ended = true;
       await giveaway.save();
       return;
