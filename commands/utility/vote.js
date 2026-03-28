@@ -11,7 +11,7 @@ export default {
             option.setName('serverid')
                 .setDescription('The ID of the server you want to vote for (Optional if used in server)')
                 .setRequired(false)),
-    aliases: ['!9k vote'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         let targetServerId = '';

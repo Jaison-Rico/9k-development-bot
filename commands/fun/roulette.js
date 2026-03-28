@@ -15,7 +15,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('roulette')
         .setDescription('Play roulette and bet your cash on numbers or colors (🎮 Fun command - may move to 9kFun bot)'),
-    aliases: ['!9k Roulette', '!9k Play Roulette', '!9k Spin'],
+    aliases: [],
     execute(interaction, User, Bot) {
         const isInteraction = interaction?.commandName !== undefined;
         const author = interaction.author || interaction.user;

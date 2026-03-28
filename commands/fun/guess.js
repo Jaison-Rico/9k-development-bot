@@ -9,7 +9,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('guess')
         .setDescription('Guess the number game - win cash if you guess correctly (🎮 Fun command - may move to 9kFun bot)'),
-    aliases: ['!9k guess', '!9k random number', '!9k number guess', '!9k number game'],
+    aliases: [],
     execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const userId = isInteraction ? msg.user.id : msg.author.id;

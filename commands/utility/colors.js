@@ -289,7 +289,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('colors')
         .setDescription('View and manage your color roles with an interactive menu'),
-    aliases: ['!9k Color Roles', '!9k Colors', '!9k List Color', '!9k Color'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         

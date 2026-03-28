@@ -7,7 +7,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('emote')
         .setDescription('Get detailed information about an emoji by reacting to the message'),
-    aliases: ['!9k Emote'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
 

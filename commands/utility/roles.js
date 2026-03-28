@@ -145,7 +145,7 @@ export default {
                     option.setName('role')
                         .setDescription('The channel role to toggle')
                         .setRequired(true))),
-    aliases: ['!9k Channel Roles', '!9k Roles', '!9k List Role', '!9k List Channel Role', '!9k Role'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         

@@ -7,7 +7,7 @@ export default {
     data: new SlashCommandBuilder()
         .setName('save')
         .setDescription('Force save bot data to database (Admin only)'),
-    aliases: ['!9k ForceSave'],
+    aliases: [],
     async execute(msg, User, Bot) {
         const isInteraction = msg.commandName !== undefined;
         const channel = msg.channel;
