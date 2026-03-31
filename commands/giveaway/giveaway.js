@@ -368,20 +368,35 @@ async function startGiveaway(interaction) {
 // End a giveaway
 async function endGiveaway(interaction) {
   const messageId = interaction.options.getString('message_id');
-  const giveaway = await Giveaway.findOne({ messageId });
+  let giveaway = await Giveaway.findOne({ messageId });
 
-  if (!giveaway || giveaway.ended) {
-    return await interaction.reply('Giveaway not found or already ended.');
+  // If not found by messageId, try by ID (database ID)
+  if (!giveaway) {
+    giveaway = await Giveaway.findOne({ id: messageId });
+  }
+
+  if (!giveaway) {
+    return await interaction.reply({
+      content: `Giveaway not found. Make sure you're using the correct message ID or giveaway ID.\nProvided ID: \`${messageId}\``,
+      flags: 64
+    });
+  }
+
+  if (giveaway.ended) {
+    return await interaction.reply({
+      content: 'This giveaway has already ended.',
+      flags: 64
+    });
   }
 
   await interaction.deferReply();
 
   try {
-    await endGiveawayById(messageId, interaction.guild, interaction);
-    await interaction.editReply('Giveaway has been ended.');
+    await endGiveawayById(messageId, interaction.guild);
+    await interaction.editReply('Giveaway has been ended. Results should appear in the giveaway channel.');
   } catch (error) {
-    console.error('Error ending giveaway:', error);
-    await interaction.editReply('Error ending giveaway.');
+    console.error('Error ending giveaway:', error.message);
+    await interaction.editReply(`Error ending giveaway: ${error.message}`);
   }
 }
 
@@ -412,10 +427,25 @@ async function cancelGiveaway(interaction) {
 // Reroll a giveaway
 async function rerollGiveaway(interaction) {
   const messageId = interaction.options.getString('message_id');
-  const giveaway = await Giveaway.findOne({ messageId });
+  let giveaway = await Giveaway.findOne({ messageId });
 
-  if (!giveaway || !giveaway.ended) {
-    return await interaction.reply('Giveaway not found or not ended yet.');
+  // If not found by messageId, try by ID (database ID)
+  if (!giveaway) {
+    giveaway = await Giveaway.findOne({ id: messageId });
+  }
+
+  if (!giveaway) {
+    return await interaction.reply({
+      content: `Giveaway not found. Make sure you're using the correct message ID or giveaway ID.\nProvided ID: \`${messageId}\``,
+      flags: 64
+    });
+  }
+
+  if (!giveaway.ended) {
+    return await interaction.reply({
+      content: 'This giveaway is still active. Wait for it to end before rerolling.',
+      flags: 64
+    });
   }
 
   await interaction.deferReply();
@@ -424,14 +454,36 @@ async function rerollGiveaway(interaction) {
     const metadata = JSON.parse(giveaway.metadata || '{}');
     const claimed = metadata.claimed || [];
     const allowMultiple = metadata.allowMultiple || false;
+    const requiredRoleId = metadata.requiredRoleId || null;
 
     let availableParticipants = giveaway.participants;
+    
+    // Filter by required role if applicable
+    if (requiredRoleId) {
+      const eligibleParticipants = [];
+      for (const userId of availableParticipants) {
+        try {
+          const member = await interaction.guild.members.fetch(userId);
+          if (member?.roles?.cache?.has(requiredRoleId)) {
+            eligibleParticipants.push(userId);
+          }
+        } catch {
+          // Ignore users that cannot be fetched
+        }
+      }
+      availableParticipants = eligibleParticipants;
+    }
+    
+    // Filter out already claimed winners if not allowing multiple wins
     if (!allowMultiple) {
-      availableParticipants = giveaway.participants.filter(p => !claimed.includes(p));
+      availableParticipants = availableParticipants.filter(p => !claimed.includes(p));
     }
 
     if (availableParticipants.length === 0) {
-      return await interaction.editReply('No available participants for reroll.');
+      const message = requiredRoleId 
+        ? 'No available participants with the required role for reroll.' 
+        : 'No available participants for reroll.';
+      return await interaction.editReply(message);
     }
 
     const winners = [];
@@ -448,21 +500,30 @@ async function rerollGiveaway(interaction) {
     const embed = new EmbedBuilder()
       .setTitle('REROLL RESULTS')
       .setDescription(`New winner(s) selected!`)
-      .addFields({ name: 'Winner(s)', value: winnerMentions, inline: false })
+      .addFields(
+        { name: 'Winner(s)', value: winnerMentions, inline: false },
+        { name: 'Total Participants', value: `${giveaway.participants.length}`, inline: true },
+        { name: 'Prize', value: metadata.description || giveaway.prize || 'N/A', inline: true }
+      )
       .setColor('#FFD700')
       .setTimestamp();
 
     const channel = await interaction.guild.channels.fetch(giveaway.channelId);
     await channel.send({ 
-      content: winnerMentions,
+      content: `Reroll! Congratulations ${winnerMentions}!`,
       embeds: [embed],
       allowedMentions: { users: winners }
     });
 
-    await interaction.editReply('Reroll completed! New winner(s) announced.');
+    // Update metadata with new winners
+    metadata.claimed.push(...winners);
+    giveaway.metadata = JSON.stringify(metadata);
+    await giveaway.save();
+
+    await interaction.editReply('Reroll completed! New winner(s) announced in the giveaway channel.');
   } catch (error) {
-    console.error('Error rerolling giveaway:', error);
-    await interaction.editReply('Error rerolling giveaway.');
+    console.error('Error rerolling giveaway:', error.message);
+    await interaction.editReply(`Error rerolling giveaway: ${error.message}`);
   }
 }
 
@@ -798,8 +859,18 @@ async function endGiveawayById(messageId, guild) {
 
   if (!giveaway || giveaway.ended) return;
 
+  let channel = null;
   try {
-    const channel = await guild.channels.fetch(giveaway.channelId);
+    channel = await guild.channels.fetch(giveaway.channelId);
+  } catch (error) {
+    console.error(`Failed to fetch channel ${giveaway.channelId}:`, error.message);
+    // Mark as ended even if channel is gone
+    giveaway.ended = true;
+    await giveaway.save();
+    return;
+  }
+
+  try {
     const metadata = JSON.parse(giveaway.metadata || '{}');
     const allowMultiple = metadata.allowMultiple || false;
     const requiredRoleId = metadata.requiredRoleId || null;
@@ -824,7 +895,9 @@ async function endGiveawayById(messageId, guild) {
       const noParticipantMessage = requiredRoleId
         ? 'No eligible participants with the required role entered the giveaway.'
         : 'No participants entered the giveaway.';
-      await channel.send(noParticipantMessage);
+      await channel.send(noParticipantMessage).catch(err => 
+        console.error('Failed to send no participants message:', err.message)
+      );
       giveaway.ended = true;
       await giveaway.save();
       return;
@@ -847,7 +920,6 @@ async function endGiveawayById(messageId, guild) {
     }
 
     const winnerMentions = winners.map(id => `<@${id}>`).join(', ');
-
     const winnerEmbed = new EmbedBuilder()
       .setTitle('GIVEAWAY ENDED')
       .setDescription(`Congratulations to the winner${winners.length > 1 ? 's' : ''}!`)
@@ -860,11 +932,22 @@ async function endGiveawayById(messageId, guild) {
       .setColor('#00FF00')
       .setTimestamp();
 
-    await channel.send({ 
-      content: `Congratulations ${winnerMentions} `,
-      embeds: [winnerEmbed],
-      allowedMentions: { users: winners }
-    });
+    // Send congratulations message
+    try {
+      await channel.send({ 
+        content: `Congratulations ${winnerMentions}! You won the giveaway!`,
+        embeds: [winnerEmbed],
+        allowedMentions: { users: winners }
+      });
+    } catch (sendError) {
+      console.error('Failed to send congratulations message:', sendError.message);
+      // Try to send a simple message at least
+      try {
+        await channel.send(`Error sending results: ${sendError.message}`);
+      } catch {
+        console.error('Could not send error message to channel');
+      }
+    }
 
     // Update metadata with winners
     metadata.claimed = [];
@@ -872,7 +955,16 @@ async function endGiveawayById(messageId, guild) {
     giveaway.metadata = JSON.stringify(metadata);
     giveaway.ended = true;
     await giveaway.save();
+    console.log(`Giveaway ${messageId} ended successfully with ${winners.length} winner(s)`);
   } catch (error) {
-    console.error('Error in endGiveawayById:', error);
+    console.error('Error in endGiveawayById:', error.message);
+    // Try to notify the channel about the error
+    if (channel) {
+      try {
+        await channel.send(`Error processing giveaway: ${error.message}`);
+      } catch {
+        console.error('Could not send error notification to channel');
+      }
+    }
   }
 }
